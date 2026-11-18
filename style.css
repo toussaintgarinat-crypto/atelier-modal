@@ -15,8 +15,8 @@ h1 span{color:var(--mu);font-weight:400}
 .chip.on{background:var(--root);color:#1b1305;border-color:var(--root);font-weight:700}
 .chip.sm{padding:4px 9px;font-size:12px}
 .chip.on2{background:var(--ac);color:#0b1220;border-color:var(--ac);font-weight:650}
-nav{display:flex;gap:4px;padding:8px 10px 0;overflow-x:auto;scrollbar-width:none}
-nav button{flex:1 0 auto;background:transparent;color:var(--mu);border:0;border-bottom:2px solid var(--bd);padding:8px 8px;font:inherit;font-size:13px;white-space:nowrap}
+nav{display:flex;gap:0;padding:8px 10px 0;overflow-x:auto;scrollbar-width:none;border-bottom:2px solid var(--bd)}
+nav button{flex:0 0 auto;background:transparent;color:var(--mu);border:0;border-bottom:2px solid transparent;padding:8px 10px;font:inherit;font-size:13px;white-space:nowrap}
 nav button.on{color:var(--tx);border-color:var(--root);font-weight:650}
 main{padding:10px}
 .card{background:var(--sf);border:1px solid var(--bd);border-radius:14px;padding:12px;margin-bottom:10px}
