@@ -63,20 +63,13 @@ function fromText(text, nbars, tonic) {
   return { notes, errs };
 }
 
-/* ---------- affichage : mini « piano roll » ---------- */
-function roll(sec) {
-  const mel = (sec.mel || []).filter(n => n[0] < sec.bars.length);
-  if (!mel.length) return `<div class="muted">Pas encore de thème pour cette section.</div>`;
-  const nb = sec.bars.length, ppb = perBar(), W = 320, H = 70, bw = W / nb, t = secTon(sec);
-  const ms = mel.map(n => midiOf(t, n)), lo = Math.min(...ms) - 1, hi = Math.max(...ms) + 1, st = (H - 6) / Math.max(6, hi - lo);
-  let g = "";
-  for (let b = 0; b <= nb; b++) g += `<line x1="${(b * bw).toFixed(1)}" x2="${(b * bw).toFixed(1)}" y1="0" y2="${H}" stroke="currentColor" opacity=".25"/>`;
-  mel.forEach((n, i) => {
-    const x = n[0] * bw + n[1] / ppb * bw, w = Math.max(2, n[2] / ppb * bw - 1), y = H - 3 - (ms[i] - lo) * st - st;
-    g += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(3, st).toFixed(1)}" rx="1.5" fill="currentColor" opacity=".85"/>`;
-  });
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;color:var(--accent,#4cc9f0)" role="img" aria-label="Thème de la section">${g}</svg>`;
-}
+/* ---------- zoom de l'onglet Morceaux (grille d'accords + portée) ---------- */
+const ZOOMS = [{ z: .5, c: 8, r: 4 }, { z: .75, c: 6, r: 3 }, { z: 1, c: 4, r: 2 }, { z: 1.5, c: 3, r: 2 }, { z: 2, c: 2, r: 2 }];
+const K_ZOOM = "atelier-modal-zoom";
+let zi = 2;
+try { const raw = localStorage.getItem(K_ZOOM), v = raw === null ? NaN : +raw; if (Number.isInteger(v) && v >= 0 && v < ZOOMS.length) zi = v; } catch (x) { }
+const zoomObj = () => ZOOMS[zi], perRow = () => ZOOMS[zi].r;
+function setZoom(n) { zi = Math.max(0, Math.min(ZOOMS.length - 1, n)); try { localStorage.setItem(K_ZOOM, String(zi)); } catch (x) { } render(); }
 
 /* ---------- éditeur : portée + clavier à l'écran ---------- */
 /* Position = pulsation absolue dans la section (mesure × pulsations par mesure + pulsation). Saisie en « écrasement » :
@@ -85,7 +78,7 @@ const ED = { si: -1, pos: 0, dur: 2, acc: "auto", base: 60 };
 const DURS = [[1, "Croche"], [2, "Noire"], [3, "Noire ·"], [4, "Blanche"], [6, "Blanche ·"], [8, "Ronde"]], GLY = [8, 6, 4, 3, 2, 1];
 const SHARP_POS = [8, 5, 9, 6, 3, 7, 4], FLAT_POS = [4, 7, 3, 6, 2, 5, 1];       // position des altérations à la clé (0 = ligne du bas)
 const SHARP_L = [3, 0, 4, 1, 5, 2, 6], FLAT_L = [6, 2, 5, 1, 4, 0, 3];
-const BW = 132, ROWH = 108, PER = 2, LINE = "#8b98a5", INK = "#e8eef4", GOLD = "#f5b13d";
+const BW = 132, ROWH = 108, LINE = "#8b98a5", INK = "#e8eef4", GOLD = "#f5b13d";
 const keyFifths = t => fifths(t) - (S.song.mode === "min" ? 3 : 0);
 const yOf = (y0, pos) => y0 + 72 - 4 * pos;
 
@@ -167,6 +160,7 @@ function drawNote(x, y0, pos, g, acc) {
   return r;
 }
 function staffSvg(si) {
+  const PER = perRow();
   const sec = S.song.sections[si], t = secTon(sec), nb = sec.bars.length, ppb = perBar(), total = nb * ppb;
   const f = keyFifths(t), nk = Math.abs(f) <= 7 ? Math.abs(f) : 0, X0 = 40 + nk * 7, W = X0 + PER * BW + 6, rows = Math.ceil(nb / PER);
   const kacc = new Array(7).fill(0);
@@ -221,7 +215,7 @@ function staffSvg(si) {
     const row = rowOf(a);
     g += `<rect x="${xAt(a)}" y="${row * ROWH}" width="${BW / ppb}" height="${ROWH}" fill="transparent" data-act="mel-pos" data-pos="${a}" style="cursor:pointer"/>`;
   }
-  return `<svg viewBox="0 0 ${W} ${rows * ROWH}" style="width:100%;height:auto;display:block" role="img" aria-label="Portée du thème">${g}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${rows * ROWH}" style="width:${zoomObj().z > 1 ? zoomObj().z * 100 : 100}%;height:auto;display:block" role="img" aria-label="Portée du thème">${g}</svg>`;
 }
 function keyboardSvg(si) {
   const t = secTon(S.song.sections[si]);
@@ -237,9 +231,8 @@ function keyboardSvg(si) {
   }
   return `<svg viewBox="0 0 ${wi * 22} 92" style="width:100%;height:auto;display:block;touch-action:manipulation" role="group" aria-label="Clavier">${w}${b}</svg>`;
 }
-function editorHtml(si) {
-  return `${staffSvg(si)}
-   <div class="tr" style="flex-wrap:wrap;margin-top:8px">${DURS.map(([v, n]) => `<button class="chip sm ${ED.dur === v ? "on2" : ""}" data-act="mel-dur" data-v="${v}">${n}</button>`).join("")}</div>
+function editorRest(si) {
+  return `<div class="tr" style="flex-wrap:wrap;margin-top:8px">${DURS.map(([v, n]) => `<button class="chip sm ${ED.dur === v ? "on2" : ""}" data-act="mel-dur" data-v="${v}">${n}</button>`).join("")}</div>
    <div class="tr" style="flex-wrap:wrap;margin-top:6px">
     <button class="btn sm sec" data-act="mel-mv" data-v="home" title="Début de la section">⏮</button>
     <button class="btn sm sec" data-act="mel-mv" data-v="-1" title="Reculer d’une croche">◀</button>
@@ -257,9 +250,9 @@ function themeInner(si, was) {
   const open = was === null || was === undefined ? (!has && !ed) : was;
   return `<div class="tr"><b>Thème</b>
       <span class="muted" style="flex:1">${has ? sec.mel.length + " notes" : "mélodie à ajouter"}</span>
-      <button class="btn sm ${ed ? "" : "sec"}" data-act="mel-edit" data-si="${si}">${ed ? "Fermer la saisie" : "✎ Portée &amp; clavier"}</button>
+      <button class="btn sm" data-act="mel-edit" data-si="${si}">${ed ? "Fermer la saisie" : "✎ Écrire le thème sur la portée"}</button>
       ${has ? `<button class="btn sm sec" data-act="mel-clear" data-si="${si}">Effacer</button>` : ""}</div>
-     ${ed ? editorHtml(si) : roll(sec)}
+     <div style="overflow-x:auto">${staffSvg(si)}</div>${ed ? editorRest(si) : ""}
      <details ${open ? "open" : ""}><summary>Écrire le thème en texte</summary>
       <div class="muted" style="margin:6px 0">Une mesure entre « | ». Chaque note : nom + octave + « : » + durée en croches (<code>Eb5:2</code>, noire = 2, blanche = 4). Silence : <code>r:2</code>. Écris Do/Ré/Mi ou C/D/E, avec # ou b.</div>
       <textarea id="mel-t${si}" rows="4" style="width:100%" spellcheck="false" placeholder="r:1 G4:3 G4:2 Bb4:1 C5:1 | …">${esc(toText(sec))}</textarea>
@@ -281,8 +274,16 @@ renderSong = function () {
     const si = +inp.dataset.si; if (!S.song.sections[si]) return;
     const d = document.createElement("div"); d.className = "themecard"; d.dataset.si = si; d.style.marginTop = "10px";
     d.innerHTML = themeInner(si, null);
-    card.appendChild(d);
+    const bars = card.querySelector(".bars");
+    if (bars) bars.after(d); else card.appendChild(d);
   });
+  const first = document.querySelector('#panel input[data-act="secname"]');
+  if (first && !$("zoomcard")) {
+    const z = document.createElement("div"); z.className = "card"; z.id = "zoomcard";
+    z.innerHTML = `<div class="tr"><span class="muted">Zoom des sections</span><button class="btn sm sec" data-act="mel-zoom" data-v="-1" ${zi === 0 ? "disabled" : ""}>− Dézoomer</button><b>${Math.round(zoomObj().z * 100)} %</b><button class="btn sm sec" data-act="mel-zoom" data-v="1" ${zi === ZOOMS.length - 1 ? "disabled" : ""}>Zoomer +</button></div>`;
+    first.closest(".card").before(z);
+  }
+  const pn = $("panel"); if (pn) { pn.style.setProperty("--cols", zoomObj().c); pn.style.setProperty("--z", zoomObj().z); }
   const hdr = document.querySelector('#panel [data-act="splay"]');
   if (hdr && !$("mel-voice") && S.song.sections.some(s => s.mel && s.mel.length)) {
     const b = document.createElement("button");
@@ -294,6 +295,7 @@ renderSong = function () {
 document.addEventListener("click", ev => {
   const t = ev.target.closest("[data-act]"); if (!t || !/^mel-/.test(t.dataset.act)) return;
   const act = t.dataset.act, sec = S.song.sections[ED.si >= 0 ? ED.si : +t.dataset.si], si = +t.dataset.si;
+  if (act === "mel-zoom") { setZoom(zi + +t.dataset.v); return; }
   if (act === "mel-voice") { S.song.melOff = !S.song.melOff; if (!S.song.melOff) delete S.song.melOff; persist(); render(); return; }
   if (act === "mel-edit") { ED.si = ED.si === si ? -1 : si; ED.pos = 0; refresh(); return; }
   if (act === "mel-clear") { const s = S.song.sections[si]; if (s) { delete s.mel; persist(); refresh(); } return; }
