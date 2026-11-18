@@ -15,8 +15,8 @@ h1 span{color:var(--mu);font-weight:400}
 .chip.on{background:var(--root);color:#1b1305;border-color:var(--root);font-weight:700}
 .chip.sm{padding:4px 9px;font-size:12px}
 .chip.on2{background:var(--ac);color:#0b1220;border-color:var(--ac);font-weight:650}
-nav{display:flex;gap:4px;padding:8px 10px 0}
-nav button{flex:1;background:transparent;color:var(--mu);border:0;border-bottom:2px solid var(--bd);padding:8px 4px;font:inherit;font-size:13.5px}
+nav{display:flex;gap:4px;padding:8px 10px 0;overflow-x:auto;scrollbar-width:none}
+nav button{flex:1 0 auto;background:transparent;color:var(--mu);border:0;border-bottom:2px solid var(--bd);padding:8px 8px;font:inherit;font-size:13px;white-space:nowrap}
 nav button.on{color:var(--tx);border-color:var(--root);font-weight:650}
 main{padding:10px}
 .card{background:var(--sf);border:1px solid var(--bd);border-radius:14px;padding:12px;margin-bottom:10px}
@@ -109,3 +109,16 @@ textarea{width:100%;min-height:70px;font-size:12px;font-family:ui-monospace,mono
 .dg button{background:var(--sf2);border:1px solid var(--bd);border-radius:10px;color:var(--tx);padding:4px;font:inherit;font-size:12px}
 .dg svg{width:100%;height:auto}
 select{background:var(--sf2);color:var(--tx);border:1px solid var(--bd);border-radius:9px;padding:6px 8px;font:inherit;font-size:13px}
+.abar{background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:6px 4px;text-align:center;min-width:0}
+.abar b{display:block;font-size:14px}
+.abar small{display:block;color:var(--mu);font-size:11px}
+.abar .no{color:var(--mu);font-size:10.5px}
+.aerr{color:var(--dim);font-size:13px;font-weight:700}
+.ul{margin:6px 0 0;padding-left:18px;font-size:12.5px}
+.plrow{display:flex;gap:6px;align-items:center;background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:6px 8px;margin:5px 0}
+.plrow.now{border-color:var(--root);background:#3a2d12}
+.plrow .no{color:var(--mu);font-size:12px;min-width:16px}
+.plrow .t{flex:1;min-width:0;font-size:14px}
+.plrow .t small{display:block;color:var(--mu);font-size:11.5px}
+.plrow button{background:var(--sf);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:5px 8px;font:inherit;font-size:12px}
+textarea:disabled,.btn:disabled{opacity:.5}
