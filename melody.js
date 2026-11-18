@@ -74,12 +74,19 @@ function setZoom(n) { zi = Math.max(0, Math.min(ZOOMS.length - 1, n)); try { loc
 /* ---------- éditeur : portée + clavier à l'écran ---------- */
 /* Position = pulsation absolue dans la section (mesure × pulsations par mesure + pulsation). Saisie en « écrasement » :
    une note posée remplace ce qui occupait sa durée, puis le curseur avance. */
-const ED = { si: -1, pos: 0, dur: 2, acc: "auto", base: 60 };
+const ED = { si: -1, pos: 0, dur: 2, acc: "auto", base: 60, click: "note", stAcc: "", collapsed: false, fp: null };
+const K_KB = "atelier-modal-kbpos";
+try { const v = JSON.parse(localStorage.getItem(K_KB)); if (v && Number.isFinite(v.x) && Number.isFinite(v.y)) ED.fp = v; } catch (x) { }
 const DURS = [[1, "Croche"], [2, "Noire"], [3, "Noire ·"], [4, "Blanche"], [6, "Blanche ·"], [8, "Ronde"]], GLY = [8, 6, 4, 3, 2, 1];
 const SHARP_POS = [8, 5, 9, 6, 3, 7, 4], FLAT_POS = [4, 7, 3, 6, 2, 5, 1];       // position des altérations à la clé (0 = ligne du bas)
 const SHARP_L = [3, 0, 4, 1, 5, 2, 6], FLAT_L = [6, 2, 5, 1, 4, 0, 3];
 const BW = 132, ROWH = 108, LINE = "#8b98a5", INK = "#e8eef4", GOLD = "#f5b13d";
 const keyFifths = t => fifths(t) - (S.song.mode === "min" ? 3 : 0);
+const keyAcc = t => {                      // altération de chaque lettre (0 = do … 6 = si) selon l'armure
+  const f = keyFifths(t), nk = Math.abs(f) <= 7 ? Math.abs(f) : 0, k = new Array(7).fill(0);
+  for (let i = 0; i < nk; i++) k[(f > 0 ? SHARP_L : FLAT_L)[i]] = f > 0 ? 1 : -1;
+  return k;
+};
 const yOf = (y0, pos) => y0 + 72 - 4 * pos;
 
 const toAbs = sec => { const ppb = perBar(); return (sec.mel || []).map(n => ({ a: n[0] * ppb + n[1], n: n[2], d: n[3], s: n[4], o: n[5] })); };
@@ -114,16 +121,26 @@ function backspace(sec) {
   const e = prev.a + prev.n;
   if (e >= pos) { fromAbs(sec, list.filter(x => x !== prev)); ED.pos = prev.a; } else ED.pos = e;
 }
+const relSpelled = (t, l, m) => { const s = mod(m - t.pc, 12); return { d: mod(l - t.l, 7), s, o: (m - refOf(t) - s) / 12 }; };
 function relOf(t, m) {
   const pc = m % 12, WH = { 0: [0, 0], 2: [1, 0], 4: [2, 0], 5: [3, 0], 7: [4, 0], 9: [5, 0], 11: [6, 0] };
-  let l, a;
-  if (pc in WH) [l, a] = WH[pc];
+  let l;
+  if (pc in WH) l = WH[pc][0];
   else {
     const sharp = ED.acc === "#" || (ED.acc === "auto" && keyFifths(t) > 0);
-    [l, a] = (sharp ? { 1: [0, 1], 3: [1, 1], 6: [3, 1], 8: [4, 1], 10: [5, 1] } : { 1: [1, -1], 3: [2, -1], 6: [4, -1], 8: [5, -1], 10: [6, -1] })[pc];
+    l = (sharp ? { 1: 0, 3: 1, 6: 3, 8: 4, 10: 5 } : { 1: 1, 3: 2, 6: 4, 8: 5, 10: 6 })[pc];
   }
-  const s = mod(pc - t.pc, 12);
-  return { d: mod(l - t.l, 7), s, o: (m - refOf(t) - s) / 12 };
+  return relSpelled(t, l, m);
+}
+/* clic sur la portée : la hauteur vient de la hauteur du clic, l'altération de l'armure (ou du choix « ♯ ♭ ♮ ») */
+function noteFromClick(ev, el, sec) {
+  const svg = el.ownerSVGElement, r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
+  const yy = (ev.clientY - r.top) * vb.height / r.height, row = Math.floor(yy / ROWH);
+  const pos = Math.max(-6, Math.min(14, Math.round((72 - (yy - row * ROWH)) / 4)));
+  const t = secTon(sec), step = pos + 30, l = mod(step, 7), oct = Math.floor(step / 7);
+  const a = ED.stAcc === "#" ? 1 : ED.stAcc === "b" ? -1 : ED.stAcc === "n" ? 0 : keyAcc(t)[l];
+  const m = 12 * (oct + 1) + NAT[l] + a;
+  return { m, rel: relSpelled(t, l, m) };
 }
 const split = (a, n, ppb) => {          // coupe une durée aux barres de mesure puis en valeurs écrites
   const out = [];
@@ -163,8 +180,7 @@ function staffSvg(si) {
   const PER = perRow();
   const sec = S.song.sections[si], t = secTon(sec), nb = sec.bars.length, ppb = perBar(), total = nb * ppb;
   const f = keyFifths(t), nk = Math.abs(f) <= 7 ? Math.abs(f) : 0, X0 = 40 + nk * 7, W = X0 + PER * BW + 6, rows = Math.ceil(nb / PER);
-  const kacc = new Array(7).fill(0);
-  for (let i = 0; i < nk; i++) kacc[(f > 0 ? SHARP_L : FLAT_L)[i]] = f > 0 ? 1 : -1;
+  const kacc = keyAcc(t);
   const xAt = (a, y0only) => { const b = Math.floor(a / ppb); return X0 + (b % PER) * BW + (a % ppb) * BW / ppb; };
   const rowOf = a => Math.floor(Math.floor(a / ppb) / PER);
   const notes = toAbs(sec).filter(x => x.a < total).sort((x, y) => x.a - y.a);
@@ -213,7 +229,7 @@ function staffSvg(si) {
   /* zones cliquables : une par pulsation */
   for (let a = 0; a < total; a++) {
     const row = rowOf(a);
-    g += `<rect x="${xAt(a)}" y="${row * ROWH}" width="${BW / ppb}" height="${ROWH}" fill="transparent" data-act="mel-pos" data-pos="${a}" style="cursor:pointer"/>`;
+    g += `<rect x="${xAt(a)}" y="${row * ROWH}" width="${BW / ppb}" height="${ROWH}" fill="transparent" data-act="mel-pos" data-si="${si}" data-pos="${a}" style="cursor:pointer"/>`;
   }
   return `<svg viewBox="0 0 ${W} ${rows * ROWH}" style="width:${zoomObj().z > 1 ? zoomObj().z * 100 : 100}%;height:auto;display:block" role="img" aria-label="Portée du thème">${g}</svg>`;
 }
@@ -231,18 +247,62 @@ function keyboardSvg(si) {
   }
   return `<svg viewBox="0 0 ${wi * 22} 92" style="width:100%;height:auto;display:block;touch-action:manipulation" role="group" aria-label="Clavier">${w}${b}</svg>`;
 }
-function editorRest(si) {
-  return `<div class="tr" style="flex-wrap:wrap;margin-top:8px">${DURS.map(([v, n]) => `<button class="chip sm ${ED.dur === v ? "on2" : ""}" data-act="mel-dur" data-v="${v}">${n}</button>`).join("")}</div>
-   <div class="tr" style="flex-wrap:wrap;margin-top:6px">
+function floatBody(si) {
+  const chips = (act, cur, arr) => arr.map(([v, n, tip]) => `<button class="chip sm ${cur === v ? "on2" : ""}" data-act="${act}" data-v="${v}" ${tip ? `title="${tip}"` : ""}>${n}</button>`).join("");
+  return `<div class="tr" style="flex-wrap:wrap;gap:4px">${DURS.map(([v, n]) => `<button class="chip sm ${ED.dur === v ? "on2" : ""}" data-act="mel-dur" data-v="${v}">${n}</button>`).join("")}</div>
+   <div class="tr" style="flex-wrap:wrap;gap:4px;margin-top:6px">
     <button class="btn sm sec" data-act="mel-mv" data-v="home" title="Début de la section">⏮</button>
     <button class="btn sm sec" data-act="mel-mv" data-v="-1" title="Reculer d’une croche">◀</button>
     <button class="btn sm sec" data-act="mel-mv" data-v="1" title="Avancer d’une croche">▶</button>
     <button class="btn sm sec" data-act="mel-rest">Silence</button>
     <button class="btn sm sec" data-act="mel-back" title="Effacer la note avant le curseur">⌫</button>
-    <button class="chip sm" data-act="mel-acc" title="Écriture des touches noires">${ED.acc === "auto" ? "♯/♭ auto" : ED.acc === "#" ? "♯" : "♭"}</button>
-    <button class="btn sm sec" data-act="mel-oct" data-v="-1">Octave −</button><button class="btn sm sec" data-act="mel-oct" data-v="1">Octave +</button></div>
+    <span class="muted">Toucher la portée :</span>${chips("mel-click", ED.click, [["note", "pose une note"], ["cursor", "déplace le curseur"]])}</div>
+   <div class="tr" style="flex-wrap:wrap;gap:4px;margin-top:6px"><span class="muted">Prochaine note :</span>${chips("mel-sa", ED.stAcc, [["", "selon l’armure"], ["#", "♯"], ["b", "♭"], ["n", "♮"]])}
+    <button class="chip sm" data-act="mel-acc" title="Écriture des touches noires du clavier">touches noires : ${ED.acc === "auto" ? "auto" : ED.acc === "#" ? "♯" : "♭"}</button></div>
    <div style="margin-top:8px">${keyboardSvg(si)}</div>
-   <div class="muted" style="margin-top:6px">Touche une note du clavier : elle est posée au curseur (trait doré) avec la durée choisie. Touche la portée pour déplacer le curseur.</div>`;
+   <div class="tr" style="margin-top:6px"><button class="btn sm sec" data-act="mel-oct" data-v="-1">Octave −</button><button class="btn sm sec" data-act="mel-oct" data-v="1">Octave +</button>
+    <span style="flex:1"></span><button class="btn sm sec" data-act="mel-dock" title="Remettre le clavier en bas de l’écran">⤓ En bas</button></div>`;
+}
+
+/* ---------- clavier flottant : se déplace en le glissant par sa barre ---------- */
+function floatEl() {
+  let el = $("mel-float"); if (el) return el;
+  el = document.createElement("div"); el.id = "mel-float"; el.className = "melfloat";
+  el.innerHTML = `<div class="hd" id="mel-hd"><span class="grip">⠿</span><b style="flex:1">Saisie du thème</b>
+    <button class="btn sm sec" data-act="mel-fold" id="mel-fold"></button><button class="btn sm sec" data-act="mel-close" title="Fermer la saisie">✕</button></div><div id="mel-fb"></div>`;
+  document.body.appendChild(el);
+  const hd = el.querySelector("#mel-hd"); let off = null;
+  hd.addEventListener("pointerdown", e => {
+    if (e.target.closest("button")) return;
+    const r = el.getBoundingClientRect(); off = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    try { hd.setPointerCapture(e.pointerId); } catch (x) { } e.preventDefault();
+  });
+  hd.addEventListener("pointermove", e => {
+    if (!off) return;
+    ED.fp = clampFp(e.clientX - off.dx, e.clientY - off.dy, el); placeFloat(el);
+  });
+  const end = () => { if (!off) return; off = null; try { localStorage.setItem(K_KB, JSON.stringify(ED.fp)); } catch (x) { } };
+  hd.addEventListener("pointerup", end); hd.addEventListener("pointercancel", end);
+  window.addEventListener("resize", () => { const f = $("mel-float"); if (f && ED.fp) { ED.fp = clampFp(ED.fp.x, ED.fp.y, f); placeFloat(f); } });
+  return el;
+}
+function clampFp(x, y, el) {
+  const w = el.offsetWidth || 340;
+  return { x: Math.max(0, Math.min(innerWidth - w, x)), y: Math.max(0, Math.min(innerHeight - 44, y)) };
+}
+function placeFloat(el) {
+  if (ED.fp) { const p = clampFp(ED.fp.x, ED.fp.y, el); el.style.left = p.x + "px"; el.style.top = p.y + "px"; el.style.bottom = "auto"; }
+  else { el.style.left = Math.max(0, (innerWidth - el.offsetWidth) / 2) + "px"; el.style.top = "auto"; el.style.bottom = "8px"; }
+}
+function syncFloat() {
+  const show = ED.si >= 0 && S.tab === "song" && S.song.sections[ED.si];
+  const el = $("mel-float");
+  document.body.classList.toggle("mel-ed-open", !!show && !ED.collapsed && !ED.fp);
+  if (!show) { if (el) el.remove(); return; }
+  const f = floatEl();
+  f.querySelector("#mel-fold").textContent = ED.collapsed ? "▴ Ouvrir" : "▾ Réduire";
+  f.querySelector("#mel-fb").innerHTML = ED.collapsed ? "" : floatBody(ED.si);
+  placeFloat(f);
 }
 
 function themeInner(si, was) {
@@ -252,7 +312,7 @@ function themeInner(si, was) {
       <span class="muted" style="flex:1">${has ? sec.mel.length + " notes" : "mélodie à ajouter"}</span>
       <button class="btn sm" data-act="mel-edit" data-si="${si}">${ed ? "Fermer la saisie" : "✎ Écrire le thème sur la portée"}</button>
       ${has ? `<button class="btn sm sec" data-act="mel-clear" data-si="${si}">Effacer</button>` : ""}</div>
-     <div style="overflow-x:auto">${staffSvg(si)}</div>${ed ? editorRest(si) : ""}
+     <div style="overflow-x:auto">${staffSvg(si)}</div>
      <details ${open ? "open" : ""}><summary>Écrire le thème en texte</summary>
       <div class="muted" style="margin:6px 0">Une mesure entre « | ». Chaque note : nom + octave + « : » + durée en croches (<code>Eb5:2</code>, noire = 2, blanche = 4). Silence : <code>r:2</code>. Écris Do/Ré/Mi ou C/D/E, avec # ou b.</div>
       <textarea id="mel-t${si}" rows="4" style="width:100%" spellcheck="false" placeholder="r:1 G4:3 G4:2 Bb4:1 C5:1 | …">${esc(toText(sec))}</textarea>
@@ -260,6 +320,7 @@ function themeInner(si, was) {
        <span class="muted" id="mel-m${si}"></span></div></details>`;
 }
 function refresh() {
+  syncFloat();
   document.querySelectorAll("#panel .themecard").forEach(d => {
     const si = +d.dataset.si, dt = d.querySelector("details");
     d.innerHTML = themeInner(si, dt ? dt.open : null);
@@ -290,6 +351,7 @@ renderSong = function () {
     b.id = "mel-voice"; b.className = "chip sm " + (S.song.melOff ? "" : "on2"); b.dataset.act = "mel-voice"; b.textContent = "Thème";
     hdr.parentNode.appendChild(b);
   }
+  syncFloat();
 };
 
 document.addEventListener("click", ev => {
@@ -297,7 +359,18 @@ document.addEventListener("click", ev => {
   const act = t.dataset.act, sec = S.song.sections[ED.si >= 0 ? ED.si : +t.dataset.si], si = +t.dataset.si;
   if (act === "mel-zoom") { setZoom(zi + +t.dataset.v); return; }
   if (act === "mel-voice") { S.song.melOff = !S.song.melOff; if (!S.song.melOff) delete S.song.melOff; persist(); render(); return; }
-  if (act === "mel-edit") { ED.si = ED.si === si ? -1 : si; ED.pos = 0; refresh(); return; }
+  if (act === "mel-edit") {
+    ED.si = ED.si === si ? -1 : si; ED.pos = 0; ED.collapsed = false; refresh();
+    if (ED.si >= 0) { const c = document.querySelector(`.themecard[data-si="${si}"]`); if (c) c.scrollIntoView({ block: "start", behavior: "smooth" }); }
+    return;
+  }
+  if (act === "mel-pos" && ED.si !== si) {            // toucher la portée d'une autre section : on y ouvre la saisie
+    if (S.song.sections[si]) { ED.si = si; ED.pos = +t.dataset.pos; ED.collapsed = false; refresh(); }
+    return;
+  }
+  if (act === "mel-close") { ED.si = -1; refresh(); return; }
+  if (act === "mel-fold") { ED.collapsed = !ED.collapsed; refresh(); return; }
+  if (act === "mel-dock") { ED.fp = null; try { localStorage.removeItem(K_KB); } catch (x) { } refresh(); return; }
   if (act === "mel-clear") { const s = S.song.sections[si]; if (s) { delete s.mel; persist(); refresh(); } return; }
   if (act === "mel-apply") {
     const s = S.song.sections[si]; if (!s) return;
@@ -310,7 +383,16 @@ document.addEventListener("click", ev => {
   }
   if (!sec || ED.si < 0) return;
   const total = sec.bars.length * perBar();
-  if (act === "mel-pos") ED.pos = +t.dataset.pos;
+  if (act === "mel-pos") {
+    ED.pos = +t.dataset.pos;
+    if (ED.click === "note") {
+      const r = noteFromClick(ev, t, sec);
+      tone(r.m, undefined, .5, .12, "sawtooth");
+      putNote(sec, r.rel, ED.dur); ED.stAcc = ""; persist();
+    }
+  }
+  else if (act === "mel-click") ED.click = t.dataset.v;
+  else if (act === "mel-sa") ED.stAcc = ED.stAcc === t.dataset.v ? "" : t.dataset.v;
   else if (act === "mel-dur") ED.dur = +t.dataset.v;
   else if (act === "mel-mv") ED.pos = t.dataset.v === "home" ? 0 : Math.max(0, Math.min(total, ED.pos + +t.dataset.v));
   else if (act === "mel-acc") ED.acc = { auto: "#", "#": "b", b: "auto" }[ED.acc];
@@ -341,6 +423,9 @@ songTick = function () {
   } catch (x) { }
   return r;
 };
+
+const _render = render;
+render = function () { _render.apply(this, arguments); if (S.tab !== "song" && ED.si >= 0) { ED.si = -1; syncFloat(); } };
 
 window.__mel = { toText, fromText, midiOf };
 if (S.tab === "song") render();
