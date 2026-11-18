@@ -432,6 +432,14 @@ function saveSongMap(song, tonic) {
   return lsSet(K_SONGS, m);
 }
 
+/* ================= Transposition ================= */
+function shiftTon(t, n) {
+  const pc = mod(t.pc + n, 12), c = TON.filter(x => x.pc === pc);
+  return c.find(x => x.a === 0) || c.find(x => x.a === (n >= 0 ? 1 : -1)) || c[0];
+}
+const setTon = t => { S.tonic = t; S.dict = t; };
+window.__tr = { shiftTon, setTon };
+
 /* ================= Playlists ================= */
 let PL = lsGet(K_PL);
 if (!PL || !Array.isArray(PL.lists) || !PL.lists.length) PL = { lists: [{ name: "Ma playlist", items: [] }], cur: 0 };
@@ -457,6 +465,7 @@ function renderPlaylist() {
     <button class="btn sm sec" data-act="pl-ren">Renommer</button><button class="btn sm sec" data-act="pl-new">+ Nouvelle</button><button class="btn sm sec" data-act="pl-del">Supprimer</button></div></div>
   <div class="card"><h2>${E(L.name)} <span class="muted">· ${L.items.length} morceau${L.items.length > 1 ? "x" : ""}</span></h2>
    <div class="tr"><button class="btn" id="plplay" data-act="pl-play">${PLAY.active ? "■ Stop" : "▶ Lire la playlist"}</button><button class="btn sm sec" data-act="pl-next">⏭ Suivant</button></div>
+   <div class="tr" style="margin-top:8px"><span class="muted">Jouer dans une autre tonalité</span><select data-act="pl-shift">${[-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6].map(n => `<option value="${n}" ${n === (L.shift || 0) ? "selected" : ""}>${n === 0 ? "Tonalités d’origine" : (n > 0 ? "+" : "−") + Math.abs(n) + " demi-ton" + (Math.abs(n) > 1 ? "s" : "")}</option>`).join("")}</select></div>
    <div class="muted" id="plnow" style="margin:6px 0">${E(PLmsg.t)}</div>
    ${L.items.length ? L.items.map((n, i) => `<div class="plrow ${PLAY.active && PLAY.i === i ? "now" : ""}"><span class="no">${i + 1}</span>${songLabel(n)}
      <button data-act="pl-one" data-i="${i}" title="Lire">▶</button><button data-act="pl-up" data-i="${i}" title="Monter">▲</button><button data-act="pl-dn" data-i="${i}" title="Descendre">▼</button><button data-act="pl-rm" data-i="${i}" title="Retirer">✕</button></div>`).join("")
@@ -483,7 +492,7 @@ function playIndex(i) {
   }
   if (i >= L.items.length) { PLAY.active = false; PLmsg.t = "Playlist terminée."; if (S.tab === "playlist") renderPlaylist(); return; }
   PLAY.internal = true;
-  try { loadSongObj(JSON.parse(JSON.stringify(songsMap()[L.items[i]]))); PLAY.active = true; PLAY.i = i; startSong(); }
+  try { loadSongObj(JSON.parse(JSON.stringify(songsMap()[L.items[i]]))); if (L.shift) setTon(shiftTon(S.tonic, L.shift)); PLAY.active = true; PLAY.i = i; startSong(); }
   finally { PLAY.internal = false; }
   PLmsg.t = "";
   if (S.tab === "playlist") renderPlaylist();
@@ -584,6 +593,7 @@ document.addEventListener("change", ev => {
     }
     case "an-key": { const [i, m] = t.value.split("|"); const ton = TON[+i]; runAnalyse({ pc: m === "min" ? ton.pc : ton.pc, minor: m === "min", forceIdx: +i }); break; }
     case "an-sig": AN.sig = t.value; break;
+    case "pl-shift": curL().shift = +t.value || 0; savePL(); if (PLAY.active) playIndex(PLAY.i); break;
     case "pl-sel": PL.cur = +t.value; PLmsg.t = ""; savePL(); renderPlaylist(); break;
   }
 });
