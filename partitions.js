@@ -137,7 +137,9 @@ function renderScores() {
      <button class="btn" data-act="sc-add" ${SC.busy ? "disabled" : ""}>+ Ajouter photo ou PDF</button></div>
     <div class="muted" id="sc-msg" style="margin-top:6px">${E(SC.msg)}</div></div>
    ${SC.loaded ? (items || `<div class="card"><div class="muted">Aucune partition pour l’instant. Ajoute une photo (appareil photo ou galerie) ou un PDF.</div></div>`) : `<div class="card"><div class="muted">Chargement…</div></div>`}
-   <div class="card"><div class="muted">Les fichiers restent <b>sur cet appareil</b> (rien n’est envoyé en ligne). Pour les garder en sécurité ou les passer à quelqu’un, utilise <b>Partager</b> (messagerie, mail, AirDrop…) ou <b>Télécharger</b>.</div></div>`;
+   <div class="card"><div class="muted">Les fichiers restent <b>sur cet appareil</b> (rien n’est envoyé en ligne). Pour les garder en sécurité ou les passer à quelqu’un, utilise <b>Partager</b> (messagerie, mail, AirDrop…) ou <b>Télécharger</b>.</div></div>
+   <div id="bk-slot"></div>`;
+  if (window.__bkFill) window.__bkFill();
 }
 
 /* ---------- onglet ---------- */
@@ -186,6 +188,7 @@ document.addEventListener("change", ev => {
 });
 document.addEventListener("keydown", ev => { if (ev.key === "Escape" && SC.view) closeView(); });
 
+window.__scores = { listMeta, getBlob, putItem, prepImage, reload };
 renderTop();                                   // l'onglet apparaît dès le chargement
 if (S.tab === "scores") render();
 })();
