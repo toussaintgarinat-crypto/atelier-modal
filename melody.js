@@ -74,7 +74,7 @@ function setZoom(n) { zi = Math.max(0, Math.min(ZOOMS.length - 1, n)); try { loc
 /* ---------- éditeur : portée + clavier à l'écran ---------- */
 /* Position = pulsation absolue dans la section (mesure × pulsations par mesure + pulsation). Saisie en « écrasement » :
    une note posée remplace ce qui occupait sa durée, puis le curseur avance. */
-const ED = { si: -1, pos: 0, dur: 2, acc: "auto", base: 60, click: "note", stAcc: "", collapsed: false, fp: null };
+const ED = { si: -1, pos: 0, dur: 2, acc: "auto", base: 60, click: "note", stAcc: "", collapsed: false, fp: null, grew: false };
 const K_KB = "atelier-modal-kbpos";
 try { const v = JSON.parse(localStorage.getItem(K_KB)); if (v && Number.isFinite(v.x) && Number.isFinite(v.y)) ED.fp = v; } catch (x) { }
 const DURS = [[1, "Croche"], [2, "Noire"], [3, "Noire ·"], [4, "Blanche"], [6, "Blanche ·"], [8, "Ronde"]], GLY = [8, 6, 4, 3, 2, 1];
@@ -108,8 +108,11 @@ function clearRange(list, pos, end) {
   return out;
 }
 function putNote(sec, rel, len) {
-  const total = sec.bars.length * perBar(), pos = ED.pos;
-  if (pos >= total) return;
+  let total = sec.bars.length * perBar(); const pos = ED.pos;
+  if (pos >= total) {                      // curseur au bout de la section : on ajoute une mesure pour continuer à écrire
+    if (sec.bars.length >= 96) return;
+    sec.bars.push(null); total += perBar(); ED.grew = true;
+  }
   len = Math.min(len, total - pos);
   const list = clearRange(toAbs(sec), pos, pos + len);
   if (rel) list.push({ a: pos, n: len, d: rel.d, s: rel.s, o: rel.o });
@@ -341,6 +344,9 @@ function themeInner(si, was) {
       <button class="btn sm" data-act="mel-edit" data-si="${si}">${ed ? "Fermer la saisie" : "✎ Écrire le thème sur la portée"}</button>
       ${has ? `<button class="btn sm sec" data-act="mel-clear" data-si="${si}">Effacer</button>` : ""}</div>
      <div style="overflow-x:auto">${staffSvg(si)}</div>
+     <div class="tr" style="margin-top:6px"><button class="btn sm sec" data-act="mel-addrow" data-si="${si}">+ Ajouter une portée</button>
+      <button class="btn sm sec" data-act="delbar" data-si="${si}" title="Retire la dernière mesure">− mesure</button>
+      <span class="muted">${sec.bars.length} mesures</span></div>
      <details ${open ? "open" : ""}><summary>Écrire le thème en texte</summary>
       <div class="muted" style="margin:6px 0">Une mesure entre « | ». Chaque note : nom + octave + « : » + durée en croches (<code>Eb5:2</code>, noire = 2, blanche = 4). Silence : <code>r:2</code>. Écris Do/Ré/Mi ou C/D/E, avec # ou b.</div>
       <textarea id="mel-t${si}" rows="4" style="width:100%" spellcheck="false" placeholder="r:1 G4:3 G4:2 Bb4:1 C5:1 | …">${esc(toText(sec))}</textarea>
@@ -386,6 +392,11 @@ renderSong = function () {
 document.addEventListener("click", ev => {
   const t = ev.target.closest("[data-act]"); if (!t || !/^mel-/.test(t.dataset.act)) return;
   const act = t.dataset.act, sec = S.song.sections[ED.si >= 0 ? ED.si : +t.dataset.si], si = +t.dataset.si;
+  if (act === "mel-addrow") {
+    const s2 = S.song.sections[si]; if (!s2) return;
+    for (let i = 0; i < perRow() && s2.bars.length < 96; i++) s2.bars.push(null);
+    persist(); render(); return;
+  }
   if (act === "mel-pdf") { printScore(); return; }
   if (act === "mel-zoom") { setZoom(zi + +t.dataset.v); return; }
   if (act === "mel-voice") { S.song.melOff = !S.song.melOff; if (!S.song.melOff) delete S.song.melOff; persist(); render(); return; }
@@ -434,7 +445,7 @@ document.addEventListener("click", ev => {
     tone(m, undefined, .5, .12, "sawtooth");
     putNote(sec, relOf(secTon(sec), m), ED.dur); persist();
   }
-  refresh();
+  if (ED.grew) { ED.grew = false; render(); } else refresh();
 });
 
 /* ---------- lecture : on joue le thème à chaque pulsation, par-dessus l'accompagnement ---------- */
