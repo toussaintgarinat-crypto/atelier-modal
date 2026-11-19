@@ -265,13 +265,13 @@ function staffSvg(si, k, print, rowSel) {
   });
   /* curseur */
   if (!print && ED.si === si && ED.v === (k || 0)) {
-    const cp = Math.min(ED.pos, total), cb = Math.min(Math.floor(cp / ppb), nb - 1), cx = cp >= total ? X0 + (cb % PER + 1) * BW : xAt(cp), y0 = Math.floor(cb / PER) * ROWH;
-    g += `<line x1="${cx}" x2="${cx}" y1="${y0 + 28}" y2="${y0 + 84}" stroke="${GOLD}" stroke-width="2"/><path d="M${cx - 4} ${y0 + 24}h8l-4 6z" fill="${GOLD}"/>`;
+    const cp = Math.min(ED.pos, total), cb = Math.min(Math.floor(cp / ppb), nb - 1), cx = cp >= total ? X0 + (cb % PER + 1) * BW : xAt(cp), crow = Math.floor(cb / PER), y0 = (crow - R0) * ROWH;
+    if (crow >= R0 && crow < R0 + RN) g += `<line x1="${cx}" x2="${cx}" y1="${y0 + 28}" y2="${y0 + 84}" stroke="${GOLD}" stroke-width="2"/><path d="M${cx - 4} ${y0 + 24}h8l-4 6z" fill="${GOLD}"/>`;
   }
   /* zones cliquables : une par pulsation */
   for (let a = 0; a < (print ? 0 : total); a++) {
-    const row = rowOf(a);
-    g += `<rect x="${xAt(a)}" y="${row * ROWH}" width="${BW / ppb}" height="${ROWH}" fill="transparent" data-act="mel-pos" data-si="${si}" data-v="${k || 0}" data-pos="${a}" style="cursor:pointer"/>`;
+    const row = rowOf(a); if (!inSel(a)) continue;
+    g += `<rect x="${xAt(a)}" y="${(row - R0) * ROWH}" width="${BW / ppb}" height="${ROWH}" fill="transparent" data-act="mel-pos" data-si="${si}" data-v="${k || 0}" data-pos="${a}" style="cursor:pointer"/>`;
   }
   return `<svg viewBox="0 0 ${W} ${RN * ROWH}" style="width:${!print && zoomObj().z > 1 ? zoomObj().z * 100 : 100}%;height:auto;display:block" role="img" aria-label="Portée ${(k || 0) + 1} du thème, clé de ${CLEFS[clef].n}">${g}</svg>`;
 }
@@ -447,20 +447,20 @@ function propsHtml(si) {
 
 function themeInner(si, was) {
   const sec = S.song.sections[si], has = hasMel(sec), ed = ED.si === si, nn = allMel(sec).reduce((x, m) => x + m.length, 0), nst = nStaves(sec);
-  const staves = Array.from({ length: nst }, (_, k) => {
+  const ctl = Array.from({ length: nst }, (_, k) => {
     const v = vOf(sec, k), act = ed && Math.min(ED.v, nst - 1) === k;
     return `<div class="tr" style="margin-top:6px"><button class="chip sm ${act ? "on2" : ""}" data-act="mel-st" data-si="${si}" data-v="${k}" title="Écrire sur cette portée">Portée ${k + 1}${act ? " ✎" : ""}</button>
       <select data-act="mel-clef" data-si="${si}" data-v="${k}" title="Changer la clé de cette portée">${Object.keys(CLEFS).map(c => `<option value="${c}" ${clefOf(v) === c ? "selected" : ""}>Clé de ${CLEFS[c].n}</option>`).join("")}</select>
-      ${k > 0 ? `<button class="chip sm" data-act="mel-delst" data-si="${si}" data-v="${k}">Supprimer</button>` : ""}</div>
-     <div style="overflow-x:auto">${staffSvg(si, k)}</div>`;
+      ${k > 0 ? `<button class="chip sm" data-act="mel-delst" data-si="${si}" data-v="${k}">Supprimer</button>` : ""}</div>`;
   }).join("");
+  const nrows = Math.ceil(sec.bars.length / perRow());                 // système par système : toutes les portées de la ligne r, puis ses accords
+  const staves = ctl + `<div style="overflow-x:auto">${Array.from({ length: nrows }, (_, r) => `<div style="margin-top:${r ? 10 : 6}px">${Array.from({ length: nst }, (_, k) => staffSvg(si, k, false, r)).join("")}${S.song.cs === false ? "" : `<div style="margin-top:2px">${chordStaffSvg(si, false, r)}</div>`}</div>`).join("")}</div>`;
   const open = was === null || was === undefined ? (!has && !ed) : was;
   return `<div class="tr"><b>Thème</b>
       <span class="muted" style="flex:1">${has ? nn + " note" + (nn > 1 ? "s" : "") : "mélodie à ajouter"}</span>
       <button class="btn sm" data-act="mel-edit" data-si="${si}">${ed ? "Fermer la saisie" : "✎ Écrire le thème sur la portée"}</button>
       ${has ? `<button class="btn sm sec" data-act="mel-clear" data-si="${si}">Effacer</button>` : ""}</div>
      ${staves}
-     ${S.song.cs === false ? "" : `<div style="overflow-x:auto;margin-top:6px">${chordStaffSvg(si)}</div>`}
      <div class="tr" style="margin-top:6px"><button class="btn sm sec" data-act="mel-addrow" data-si="${si}">+ 2 mesures</button>
       <button class="btn sm sec" data-act="delbar" data-si="${si}" title="Retire la dernière mesure">− mesure</button><span class="muted">${sec.bars.length} mesures</span></div>
      <div class="tr" style="margin-top:6px">${nst < MAXST ? `<button class="btn sm sec" data-act="mel-addst" data-si="${si}">+ Ajouter une portée</button>` : ""}
