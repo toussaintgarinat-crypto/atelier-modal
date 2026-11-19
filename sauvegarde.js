@@ -7,7 +7,7 @@
 const $ = id => document.getElementById(id);
 const E = s => esc(String(s));
 const K_SONGS = "atelier-modal-songs", K_PL = "atelier-modal-playlists", K_GID = "atelier-modal-gcid";
-const DEFAULT_CLIENT_ID = "";                       // identifiant client Google (public) à renseigner une fois créé dans Google Cloud ; sinon chacun peut saisir le sien
+const DEFAULT_CLIENT_ID = "909003621424-mpttgr57brn71su2mt4c35cac903a660.apps.googleusercontent.com";                       // identifiant client Google (public) à renseigner une fois créé dans Google Cloud ; sinon chacun peut saisir le sien
 const SCOPE = "https://www.googleapis.com/auth/drive.file", FOLDER = "Atelier modal";
 const BK = { msg: "", busy: false, gmsg: "", gopen: false };
 const SCR = () => window.__scores;
