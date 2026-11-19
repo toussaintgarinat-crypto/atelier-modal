@@ -947,6 +947,17 @@ async function songPdf(entry, part) {                   // entry = { song, tonic
 }
 
 window.__melPdf = songPdf;
+window.__melParts = entry => {                    // instruments d'un morceau enregistré (vide s'il n'y en a qu'un : la partie seule serait identique au morceau)
+  try {
+    if (!entry || !entry.song || !Array.isArray(entry.song.sections)) return [];
+    const out = []; let any = false;
+    entry.song.sections.forEach(sec => {
+      const all = [sec].concat(sec.st || []);
+      all.forEach((v, k) => { if (v && v.mel && v.mel.length) any = true; const n = ((v && v.ins) || "").trim() || (k === 0 ? "Thème" : "Portée " + (k + 1)); if (!out.includes(n)) out.push(n); });
+    });
+    return any && out.length > 1 ? out : [];
+  } catch (x) { return []; }
+};
 window.__mel = { toText, fromText, midiOf, vOf, chordProps, posOf, ED, printHtml };
 if (S.tab === "song") render();
 })();

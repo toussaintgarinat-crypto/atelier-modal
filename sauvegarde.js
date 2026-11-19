@@ -69,6 +69,8 @@ async function songPdfs(say, songs) {
   for (let i = 0; i < names.length; i++) {
     if (say) say(`Mise en page des partitions… ${i + 1}/${names.length}`);
     try { out.push({ name: names[i], h: hash(JSON.stringify(songs[names[i]])), blob: await window.__melPdf(songs[names[i]]) }); } catch (x) { }
+    const parts = window.__melParts ? window.__melParts(songs[names[i]]) : [];       // un PDF par instrument, avec les accords
+    for (const part of parts) { try { out.push({ name: `${names[i]} - ${part}`, part: true, blob: await window.__melPdf(songs[names[i]], part) }); } catch (x) { } }
   }
   return out;
 }
@@ -84,7 +86,7 @@ async function collect(say) {
   }
   const data = { v: 1, saved: new Date().toISOString(), songs: pickSongs(), playlists: pickPl() };
   const pdfs = await songPdfs(say, data.songs); const used = {};
-  pdfs.forEach(p => { let n = safe(p.name); used[n] = (used[n] || 0) + 1; if (used[n] > 1) n += " (" + used[n] + ")"; files.push({ name: `partitions-ecrites/${n}.pdf`, blob: p.blob }); });
+  pdfs.forEach(p => { let n = safe(p.name); used[n] = (used[n] || 0) + 1; if (used[n] > 1) n += " (" + used[n] + ")"; files.push({ name: `partitions-ecrites/${p.part ? "parties/" : ""}${n}.pdf`, blob: p.blob }); });
   files.unshift({ name: "partitions/index.json", blob: new Blob([JSON.stringify(index)], { type: "application/json" }) });
   files.unshift({ name: "morceaux.json", blob: new Blob([JSON.stringify(data, null, 1)], { type: "application/json" }) });
   return { files, nSongs: Object.keys(data.songs).length, nScores: index.length, nPdf: pdfs.length, miss };
@@ -254,13 +256,15 @@ async function driveBackup(say) {
   await api(old ? `files/${old.id}?uploadType=multipart&fields=id` : "files?uploadType=multipart&fields=id", { method: old ? "PATCH" : "POST", headers: mp.headers, body: mp.body }, true);
   /* partitions écrites en PDF : un fichier par morceau, renvoyé seulement s'il a changé */
   const nm = Object.keys(songs).filter(k => songs[k] && validSong(songs[k].song)).slice(0, 300); let pdfUp = 0, pdfFail = 0;
-  for (let i = 0; i < nm.length; i++) {
-    const h = hash(JSON.stringify(songs[nm[i]])), key = hash(nm[i]), prev = remote.find(f => f.appProperties && f.appProperties.amPdf === key);
+  const jobs = [];
+  nm.forEach(n => { jobs.push({ n, part: "" }); (window.__melParts ? window.__melParts(songs[n]) : []).forEach(part => jobs.push({ n, part })); });
+  for (let i = 0; i < jobs.length; i++) {
+    const { n, part } = jobs[i], h = hash(JSON.stringify(songs[n])), key = hash(part ? n + "|" + part : n), prev = remote.find(f => f.appProperties && f.appProperties.amPdf === key);
     if (prev && prev.appProperties.amPdfH === h) continue;
-    say(`Envoi des partitions écrites (PDF)… ${i + 1}/${nm.length}`);
+    say(`Envoi des partitions écrites (PDF)… ${i + 1}/${jobs.length}`);
     try {
-      const pdf = await window.__melPdf(songs[nm[i]]);
-      const m2 = multipart(prev ? { appProperties: { amPdf: key, amPdfH: h } } : { name: `${safe(nm[i])} (partition).pdf`, parents: [fid], appProperties: { amPdf: key, amPdfH: h } }, pdf, "application/pdf");
+      const pdf = await window.__melPdf(songs[n], part || undefined);
+      const m2 = multipart(prev ? { appProperties: { amPdf: key, amPdfH: h } } : { name: `${safe(n)}${part ? " - " + safe(part) : ""} (partition).pdf`, parents: [fid], appProperties: { amPdf: key, amPdfH: h } }, pdf, "application/pdf");
       await api(prev ? `files/${prev.id}?uploadType=multipart&fields=id` : "files?uploadType=multipart&fields=id", { method: prev ? "PATCH" : "POST", headers: m2.headers, body: m2.body }, true); pdfUp++;
     } catch (x) { pdfFail++; }
   }
