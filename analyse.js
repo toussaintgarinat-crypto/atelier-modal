@@ -283,7 +283,7 @@ const multiBars = res => res.parsed.sections.some(s => s.bars.some(b => b.filter
 
 /* ================= OpenRouter ================= */
 const OR = Object.assign({ key: "", model: "" }, lsGet(K_OR) || {});
-const AN = { text: "", name: "Grille analysée", sig: "4/4", img: null, status: "", busy: false, res: null, parsed: null, models: [], setOpen: false };
+const AN = { flow: false, text: "", name: "Grille analysée", sig: "4/4", img: null, status: "", busy: false, res: null, parsed: null, models: [], setOpen: false };
 { const sv = lsGet(K_AN); if (sv && typeof sv.text === "string") { AN.text = sv.text; if (sv.name) AN.name = sv.name; } }
 const persistAN = () => lsSet(K_AN, { text: AN.text, name: AN.name });
 const PROMPT = "Tu lis la photo d’une grille d’accords (partition, lead sheet, feuille manuscrite). Transcris UNIQUEMENT les accords, mesure par mesure, dans ce format texte strict : une ligne par ligne de la grille, mesures séparées par « | », accords en notation standard (C, Am7, F#m7b5, Bb, Gmaj7, D7/F#). Si la grille a des sections (Couplet, Refrain…), écris leur nom seul sur une ligne entre crochets, par exemple [Couplet]. Écris % pour une mesure qui répète la précédente. Deux accords dans la même mesure sont séparés par un espace. Si un accord est illisible, écris ?. N’ajoute aucun commentaire, aucune explication, aucun markdown.";
@@ -396,7 +396,8 @@ function resultHtml(res) {
   <div class="card"><h2>Accord par accord</h2>${per}</div>
   <div class="card"><h2>Jouer cette grille</h2>
    <div class="tr"><input class="nm" data-act="an-name" value="${E(AN.name)}"><select data-act="an-sig">${["4/4", "3/4", "6/8"].map(s => `<option ${s === AN.sig ? "selected" : ""}>${s}</option>`).join("")}</select></div>
-   <div class="tr" style="margin-top:8px"><button class="btn" data-act="an-send">▶ Envoyer vers Morceaux</button><button class="btn sm sec" data-act="an-save">Enregistrer dans mes morceaux</button></div>
+   <div class="tr" style="margin-top:8px"><button class="btn" data-act="an-send">▶ Envoyer vers Morceaux</button><button class="btn sm sec" data-act="an-save">Enregistrer dans mes morceaux</button><button class="btn sm sec" data-act="an-share">📤 Partager</button></div>
+   <div class="muted" style="margin-top:6px">Relis les accords avant d’enregistrer ou de partager : la lecture d’une photo peut se tromper, surtout sur de l’écriture à la main.</div>
    <div class="muted" id="an-msg" style="margin-top:6px"></div></div>`;
 }
 function renderAnalyse() {
@@ -407,6 +408,7 @@ function renderAnalyse() {
    <div class="tr" style="margin-top:8px"><input type="file" accept="image/*" id="an-file" data-act="an-file" style="display:none">
     <button class="btn sm" data-act="an-pick">📷 Photo</button><button class="btn sm sec" data-act="an-read" ${AN.img && !AN.busy ? "" : "disabled"}>Lire la photo</button></div>
    ${AN.img ? `<img src="${AN.img}" alt="Photo de la grille" style="max-width:100%;max-height:170px;border-radius:10px;margin-top:8px">` : ""}
+   ${AN.img && window.__an ? `<div class="tr" style="margin-top:6px"><button class="btn sm sec" data-act="sc-keep">Garder aussi la photo dans Partitions</button></div>` : ""}
    <div class="muted" id="an-status" style="margin:6px 0">${E(AN.status)}</div>
    <textarea id="an-text" data-act="an-text" rows="7" placeholder="[Couplet]&#10;| Am7 | D7 | Gmaj7 | Cmaj7 |&#10;| F#m7b5 | B7 | Em | % |">${E(AN.text)}</textarea>
    <div class="tr" style="margin-top:8px"><button class="btn" data-act="an-go">Analyser</button><button class="btn sm sec" data-act="an-clear">Vider</button></div>
@@ -533,6 +535,22 @@ document.addEventListener("click", ev => {
   const a = t.dataset.act, v = t.dataset.v, i = +t.dataset.i;
   switch (a) {
     case "an-pick": $("an-file").click(); break;
+    case "sng-photo": {                                   // depuis Morceaux : on ouvre l'analyse et le choix de la photo d'un seul geste
+      stopSong(); AN.flow = true; AN.res = null; AN.img = null;
+      AN.status = OR.key && OR.model ? "Choisis ou prends la photo de la partition : elle sera lue puis analysée." : "Choisis la photo. Sans clé OpenRouter (réglages ci-dessous), elle ne peut pas être lue toute seule : tape les accords en la regardant.";
+      if (!OR.key || !OR.model) AN.setOpen = true;
+      S.tab = "analyse"; render();
+      const f = $("an-file"); if (f) f.click();
+      break;
+    }
+    case "an-share": {
+      if (!AN.res || AN.res.error) break;
+      const song = toSong(AN.res, AN.name, AN.sig);
+      saveSongMap(song, AN.res.tonic);
+      S.tab = "song"; loadSongObj({ song, tonic: [AN.res.tonic.l, AN.res.tonic.a] });
+      const b = document.querySelector('[data-act="sh-open-share"]'); if (b) b.click();
+      break;
+    }
     case "an-read": readPhoto(); break;
     case "an-go": runAnalyse(); break;
     case "an-clear": AN.text = ""; AN.res = null; AN.img = null; AN.status = ""; persistAN(); renderAnalyse(); break;
@@ -552,7 +570,7 @@ document.addEventListener("click", ev => {
     case "an-save": {
       if (!AN.res || AN.res.error) break;
       const song = toSong(AN.res, AN.name, AN.sig), ok = saveSongMap(song, AN.res.tonic), m = $("an-msg");
-      if (m) m.textContent = ok ? `Enregistré sous « ${song.name} » : tu peux l’ajouter à une playlist.` : "Enregistrement impossible ici.";
+      if (m) m.textContent = ok ? `Enregistré sous « ${song.name} » : tu peux l’ajouter à une playlist, ou le partager (bouton Partager).` : "Enregistrement impossible ici.";
       break;
     }
     case "pl-new": {
@@ -587,8 +605,11 @@ document.addEventListener("change", ev => {
     case "an-file": {
       const f = t.files && t.files[0]; if (!f) break;
       setStatus("Préparation de la photo…");
-      shrink(f).then(d => { AN.img = d; AN.status = "Photo prête. Appuie sur « Lire la photo » (ou tape les accords à la main)."; renderAnalyse(); })
-        .catch(x => setStatus(x.message));
+      shrink(f).then(d => {
+        AN.img = d; AN.status = AN.flow && !(OR.key && OR.model) ? "Photo prête. Sans clé OpenRouter elle ne peut pas être lue toute seule : tape les accords en la regardant, ou ajoute ta clé dans les réglages ci-dessous." : "Photo prête. Appuie sur « Lire la photo » (ou tape les accords à la main)."; renderAnalyse();
+        const auto = AN.flow && OR.key && OR.model; AN.flow = false;
+        if (auto) readPhoto().then(() => { if (AN.text.trim() && !AN.busy) { runAnalyse(); AN.status += " Vérifie les accords avant d’enregistrer ou de partager."; } });
+      }).catch(x => setStatus(x.message));
       break;
     }
     case "an-key": { const [i, m] = t.value.split("|"); const ton = TON[+i]; runAnalyse({ pc: m === "min" ? ton.pc : ton.pc, minor: m === "min", forceIdx: +i }); break; }
@@ -601,4 +622,14 @@ document.addEventListener("toggle", ev => { if (ev.target && ev.target.id === "a
 
 render();
 window.__analyse = { parseChord, parseGrid, analyse, toSong };
+/* appelé par l'onglet Partitions : envoyer une photo vers l'analyse / récupérer la photo en cours */
+window.__an = {
+  setPhoto(dataUrl) {
+    AN.img = dataUrl; AN.res = null; AN.flow = false;
+    AN.status = OR.key && OR.model ? "Photo prête. Appuie sur « Lire la photo »." : "Photo prête. Sans clé OpenRouter elle ne peut pas être lue toute seule : tape les accords en la regardant, ou ajoute ta clé dans les réglages ci-dessous.";
+    if (!(OR.key && OR.model)) AN.setOpen = true;
+    S.tab = "analyse"; render();
+  },
+  getPhoto() { return AN.img; }
+};
 })();

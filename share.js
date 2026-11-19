@@ -133,7 +133,9 @@ renderSong = function () {
   if (!p || $("shcard")) return;
   const c = document.createElement("div");
   c.className = "card"; c.id = "shcard";
-  c.innerHTML = `<h2>Envoyer / recevoir</h2><div class="tr"><button class="btn sm" data-act="sh-open-share">📱 Partager par QR code</button><button class="btn sm sec" data-act="sh-open-scan">📷 Recevoir</button></div>`;
+  c.innerHTML = `<h2>Envoyer / recevoir</h2><div class="tr"><button class="btn sm" data-act="sh-open-share">📱 Partager par QR code</button><button class="btn sm sec" data-act="sh-open-scan">📷 Recevoir</button></div>
+   <div class="tr" style="margin-top:8px"><button class="btn sm" data-act="sng-photo">🖼 Ajouter un morceau depuis une photo</button></div>
+   <div class="muted" style="margin-top:6px">Recevoir un morceau (QR code ou lien) ne demande aucune clé. Lire une photo de partition demande une clé OpenRouter, à régler une fois dans l’onglet Analyse ; sans clé, tu peux taper les accords en regardant la photo. Pour garder une photo ou un PDF <b>tel quel</b>, utilise l’onglet <b>Partitions</b>.</div>`;
   p.insertBefore(c, p.children[1] || null);
 };
 
