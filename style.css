@@ -150,3 +150,5 @@ body.mel-ed-open{padding-bottom:340px}
   body.printing #mel-print{display:block;color:#000;background:#fff;font-family:system-ui,sans-serif}
   body.printing #mel-print h1{font-size:22px;margin:0}
 }
+.themecard svg,.melfloat svg{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.psys{break-inside:avoid;margin-bottom:10px}
