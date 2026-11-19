@@ -13,7 +13,8 @@ const b64d = s => decodeURIComponent(escape(atob(s.replace(/-/g, "+").replace(/_
 function encodeSong(song, tonic) {
   const ti = TON.findIndex(t => t.l === tonic.l && t.a === tonic.a);
   const arr = [1, song.name, song.mode, song.bpm, song.sig, song.pstyle, song.gstyle, song.loop ? 1 : 0, ti < 0 ? 0 : ti,
-    song.sections.map(s => [s.name, s.rep || 1, s.bars.map(b => b ? b.s + ":" + b.q : ""), s.shift | 0, s.mel && s.mel.length ? s.mel : 0])];
+    song.sections.map(s => [s.name, s.rep || 1, s.bars.map(b => b ? b.s + ":" + b.q : ""), s.shift | 0, s.mel && s.mel.length ? s.mel : 0,
+      s.st && s.st.length ? s.st.map(v => [v.clef || "sol", v.mel || []]) : 0, s.clef || 0])];
   return b64e(JSON.stringify(arr));
 }
 function decodeSong(code) {
@@ -35,9 +36,13 @@ function decodeSong(code) {
       });
       const sh = Math.max(-11, Math.min(11, s[3] | 0)), o = { name: s[0].slice(0, 60), rep: Math.min(4, Math.max(1, s[1] | 0)), bars };
       if (sh) o.shift = sh;
-      if (Array.isArray(s[4]) && s[4].length <= 400) {
-        const mel = s[4].filter(n => Array.isArray(n) && n.length === 6 && n.every(Number.isInteger) && n[0] >= 0 && n[0] < bars.length && n[1] >= 0 && n[1] < 12 && n[2] >= 1 && n[2] <= 32 && n[3] >= 0 && n[3] < 7 && n[4] >= 0 && n[4] < 12 && Math.abs(n[5]) <= 3);
-        if (mel.length) o.mel = mel;
+      const CL = ["sol", "fa", "ut3", "ut4"];
+      const okMel = a => Array.isArray(a) && a.length <= 400 ? a.filter(n => Array.isArray(n) && n.length === 6 && n.every(Number.isInteger) && n[0] >= 0 && n[0] < bars.length && n[1] >= 0 && n[1] < 12 && n[2] >= 1 && n[2] <= 32 && n[3] >= 0 && n[3] < 7 && n[4] >= 0 && n[4] < 12 && Math.abs(n[5]) <= 3) : [];
+      const mel = okMel(s[4]); if (mel.length) o.mel = mel;
+      if (CL.includes(s[6]) && s[6] !== "sol") o.clef = s[6];
+      if (Array.isArray(s[5])) {
+        const st = s[5].slice(0, 3).filter(v => Array.isArray(v) && CL.includes(v[0])).map(v => { const x = {}; if (v[0] !== "sol") x.clef = v[0]; const m2 = okMel(v[1]); if (m2.length) x.mel = m2; return x; });
+        if (st.length) o.st = st;
       }
       return o;
     });

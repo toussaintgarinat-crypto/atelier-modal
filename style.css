@@ -135,3 +135,4 @@ textarea:disabled,.btn:disabled{opacity:.5}
 .melfloat .hd:active{cursor:grabbing}
 .melfloat .grip{color:var(--mu);font-size:18px;padding:0 4px}
 body.mel-ed-open{padding-bottom:340px}
+.themecard svg,.melfloat svg{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
