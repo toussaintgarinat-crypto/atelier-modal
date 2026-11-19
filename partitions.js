@@ -162,19 +162,23 @@ async function openItem(id) {
 }
 function drawView() {
   const d = $("scview"); if (!d || !SC.view) return;
-  const v = SC.view, pl = window.__pl, names = pl ? pl.names() : [];
+  const v = SC.view, pl = window.__pl, names = pl ? pl.names() : [], ob = d.querySelector(".scbody"), keepTop = ob && !v.top ? ob.scrollTop : 0; v.top = false;
   d.innerHTML = `<div class="scbar"><b style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(v.name)}</b>
     <button class="btn sm sec" data-act="sc-zoom" data-v="-1">−</button><span>${Math.round(v.z * 100)} %</span><button class="btn sm sec" data-act="sc-zoom" data-v="1">+</button>
-    ${v.pages > 1 ? `<button class="btn sm sec" data-act="sc-page" data-v="-1" ${v.page <= 1 ? "disabled" : ""}>‹</button><span>p. ${v.page}/${v.pages}</span><button class="btn sm sec" data-act="sc-page" data-v="1" ${v.page >= v.pages ? "disabled" : ""}>›</button>` : ""}
+    ${v.pages > 1 ? `<button class="btn sm sec" data-act="sc-goto" data-v="1" ${v.page <= 1 ? "disabled" : ""} title="Première page">⏮</button><button class="btn sm sec" data-act="sc-page" data-v="-1" ${v.page <= 1 ? "disabled" : ""}>‹</button>
+     <span>p. <input type="number" inputmode="numeric" min="1" max="${v.pages}" value="${v.page}" data-act="sc-goto" aria-label="Aller à la page" style="width:3.4em;text-align:center"> / ${v.pages}</span>
+     <button class="btn sm sec" data-act="sc-page" data-v="1" ${v.page >= v.pages ? "disabled" : ""}>›</button><button class="btn sm sec" data-act="sc-goto" data-v="${v.pages}" ${v.page >= v.pages ? "disabled" : ""} title="Dernière page">⏭</button>` : ""}
     <button class="btn sm ${v.cut ? "" : "sec"}" data-act="sc-cut" title="Découper une partie de la partition">✂ Découper</button>
     <button class="btn sm" data-act="sc-close">Fermer</button></div>
-   ${v.cut ? `<div class="scbar" style="flex-wrap:wrap"><span class="muted" style="flex:1;min-width:160px">${v.cut.r ? "Zone choisie : tu peux la refaire." : "Trace un rectangle sur la partition avec le doigt ou la souris."}</span>
+   ${v.cut ? `<div class="scbar" style="flex-wrap:wrap"><span class="muted" style="flex:1;min-width:160px">${v.cut.scroll ? "Mode défilement : fais glisser la partition vers le haut ou le bas. Repasse en « Tracer » pour choisir la zone." : v.cut.r ? "Zone choisie : tu peux la refaire." : "Trace un rectangle sur la partition avec le doigt ou la souris."}</span>
+     <button class="btn sm ${v.cut.scroll ? "" : "sec"}" data-act="sc-mode" title="Alterner entre tracer la zone et faire défiler le document">${v.cut.scroll ? "✂ Tracer" : "✋ Défiler"}</button>
      ${names.length ? `<select data-act="sc-plsel">${names.map((n, i) => `<option value="${i}" ${i === (v.cut.pl >= 0 ? v.cut.pl : pl.cur()) ? "selected" : ""}>${E(n)}</option>`).join("")}</select>` : ""}
      <button class="btn sm" data-act="sc-cutpl" ${v.cut.r && names.length ? "" : "disabled"}>→ Playlist</button>
      <button class="btn sm sec" data-act="sc-cutok" ${v.cut.r ? "" : "disabled"}>Garder dans Partitions</button>
      ${v.msg ? `<div class="muted" style="width:100%">${E(v.msg)}</div>` : ""}</div>` : ""}
    <div class="scbody"><div id="scwrap" style="position:relative;margin:0 auto;width:${v.z * 100}%"><img src="${v.url}" alt="${E(v.name)}" style="width:100%;max-width:none;display:block;user-select:none;-webkit-user-drag:none">
-    ${v.cut ? `<div id="scov" style="position:absolute;inset:0;touch-action:none;cursor:crosshair;background:rgba(0,0,0,.18)"><div id="screct" style="position:absolute;border:2px solid #f5b13d;background:rgba(245,177,61,.18);display:none"></div></div>` : ""}</div></div>`;
+    ${v.cut ? `<div id="scov" style="position:absolute;inset:0;${v.cut.scroll ? "pointer-events:none;" : "touch-action:none;cursor:crosshair;"}background:rgba(0,0,0,.18)"><div id="screct" style="position:absolute;border:2px solid #f5b13d;background:rgba(245,177,61,.18);display:none"></div></div>` : ""}</div></div>`;
+  const nb = d.querySelector(".scbody"); if (nb) nb.scrollTop = keepTop;
   if (v.cut) wireCrop();
 }
 function drawRect() {
@@ -210,6 +214,11 @@ async function cropSelection() {                 // la zone choisie devient une 
   const meta = { id, name: (v.name + (v.pages ? " p." + v.page : "") + " (extrait)").slice(0, 80), type: "image/jpeg", size: p.blob.size, added: Date.now(), thumb: p.thumb };
   await putItem(meta, p.blob); await reload();
   return meta;
+}
+function goPage(to) {                                      // aller directement à une page (le haut de la page s'affiche)
+  const v = SC.view; if (!v || !v.doc) return; const n = Math.max(1, Math.min(v.pages, Math.round(+to) || v.page));
+  if (n === v.page) { drawView(); return; }
+  renderPdfPage(v, n).then(() => { if (SC.view === v) { if (v.cut) v.cut.r = null; v.msg = ""; v.top = true; drawView(); } });
 }
 function closeView() { if (SC.view) { if (SC.view.url) URL.revokeObjectURL(SC.view.url); try { if (SC.view.doc) SC.view.doc.destroy(); } catch (x) { } SC.view = null; } const d = $("scview"); if (d) d.remove(); }
 
@@ -271,10 +280,9 @@ document.addEventListener("click", ev => {
       .then(() => { SC.msg = `« ${m.name} » est maintenant sur Drive seulement (vignette gardée).`; return reload(); }).catch(x => note(x.message));
   }
   else if (a === "sc-pl") { const pl = window.__pl; if (pl) { const n = pl.add("@score:" + id); const m = SC.items.find(x => x.id === id); SC.msg = `« ${m ? m.name : "Partition"} » ajoutée à la playlist « ${n} ».`; renderScores(); } }
-  else if (a === "sc-page") {
-    const v = SC.view; if (!v || !v.doc) return; const n = Math.max(1, Math.min(v.pages, v.page + +t.dataset.v)); if (n === v.page) return;
-    renderPdfPage(v, n).then(() => { if (SC.view === v) { if (v.cut) v.cut.r = null; v.msg = ""; drawView(); } });
-  }
+  else if (a === "sc-page") goPage(SC.view && SC.view.page + +t.dataset.v);
+  else if (a === "sc-goto" && t.tagName === "BUTTON") goPage(+t.dataset.v);
+  else if (a === "sc-mode") { if (SC.view && SC.view.cut) { SC.view.cut.scroll = !SC.view.cut.scroll; drawView(); } }
   else if (a === "sc-cut") { if (SC.view) { SC.view.cut = SC.view.cut ? null : { r: null, pl: -1 }; SC.view.msg = ""; drawView(); } }
   else if (a === "sc-cutok" || a === "sc-cutpl") {
     if (!SC.view || !SC.view.cut) return;
@@ -299,6 +307,7 @@ document.addEventListener("click", ev => {
 });
 document.addEventListener("change", ev => {
   const t = ev.target; if (!t.dataset) return;
+  if (t.dataset.act === "sc-goto" && t.tagName === "INPUT") { goPage(+t.value); return; }
   if (t.dataset.act === "sc-plsel") { if (SC.view && SC.view.cut) SC.view.cut.pl = +t.value; return; }
   if (t.dataset.act === "sc-file") { const fs = Array.from(t.files || []); t.value = ""; if (fs.length) addFiles(fs); }
   else if (t.dataset.act === "sc-name") {
