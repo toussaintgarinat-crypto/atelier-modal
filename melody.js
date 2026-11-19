@@ -319,8 +319,8 @@ function printHtml() {
       const sh = shiftOf(sec);
       const rows = Math.ceil(sec.bars.length / 4);
       const body = hasMel(sec)
-        ? Array.from({ length: rows }, (_, r) => `<div class="psys">${Array.from({ length: nStaves(sec) }, (_, k) => staffSvg(si, k, true, r)).join("")}${so.cs === false ? "" : chordStaffSvg(si, true, r)}</div>`).join("")
-        : chordRow(sec);
+        ? Array.from({ length: rows }, (_, r) => `<div class="psys">${so.cs === false ? "" : chordStaffSvg(si, true, r)}${Array.from({ length: nStaves(sec) }, (_, k) => staffSvg(si, k, true, r)).join("")}</div>`).join("")
+        : so.cs === false ? chordRow(sec) : Array.from({ length: rows }, (_, r) => `<div class="psys">${chordStaffSvg(si, true, r)}</div>`).join("");
       return `<section class="psec"><h2>${esc(sec.name)}${(sec.rep || 1) > 1 ? ` <span>×${sec.rep}</span>` : ""}${sh ? ` <span>— en ${esc(nmN(secTon(sec)))} ${mode}</span>` : ""}</h2>${body}</section>`;
     }).join("");
     return `<h1>${esc(so.name || "Morceau")}</h1><p class="psub">Tonalité : ${esc(nmN(S.tonic))} ${mode} · ${esc(so.sig)} · ♩ = ${so.bpm}</p>${secs}<p class="pfoot">Atelier modal</p>`;
@@ -492,7 +492,7 @@ function themeInner(si, was) {
       ${k > 0 ? `<button class="chip sm" data-act="mel-delst" data-si="${si}" data-v="${k}">Supprimer</button>` : ""}</div>`;
   }).join("");
   const nrows = Math.ceil(sec.bars.length / perRow());                 // système par système : toutes les portées de la ligne r, puis ses accords
-  const staves = ctl + `<div style="overflow-x:auto">${Array.from({ length: nrows }, (_, r) => `<div style="margin-top:${r ? 10 : 6}px">${Array.from({ length: nst }, (_, k) => staffSvg(si, k, false, r)).join("")}${S.song.cs === false ? "" : `<div style="margin-top:2px">${chordStaffSvg(si, false, r)}</div>`}</div>`).join("")}</div>`;
+  const staves = ctl + `<div style="overflow-x:auto">${Array.from({ length: nrows }, (_, r) => `<div style="margin-top:${r ? 10 : 6}px">${S.song.cs === false ? "" : `<div style="margin-bottom:2px">${chordStaffSvg(si, false, r)}</div>`}${Array.from({ length: nst }, (_, k) => staffSvg(si, k, false, r)).join("")}</div>`).join("")}</div>`;
   const open = was === null || was === undefined ? (!has && !ed) : was;
   return `<div class="tr"><b>Thème</b>
       <span class="muted" style="flex:1">${has ? nn + " note" + (nn > 1 ? "s" : "") : "mélodie à ajouter"}</span>
@@ -734,7 +734,8 @@ async function songPdf(entry) {                   // entry = { song, tonic } tel
     so.sections.forEach((sec, si) => {
       const sh = shiftOf(sec), rows = Math.ceil(sec.bars.length / 4);
       lay.push({ t: "h2", x: `${sec.name}${(sec.rep || 1) > 1 ? " ×" + sec.rep : ""}${sh ? ` — en ${nmN(secTon(sec))} ${mode}` : ""}` });
-      if (hasMel(sec)) for (let r = 0; r < rows; r++) lay.push({ t: "sys", svgs: Array.from({ length: nStaves(sec) }, (_, k) => staffSvg(si, k, true, r)).concat(so.cs === false ? [] : [chordStaffSvg(si, true, r)]) });
+      if (hasMel(sec)) for (let r = 0; r < rows; r++) lay.push({ t: "sys", svgs: (so.cs === false ? [] : [chordStaffSvg(si, true, r)]).concat(Array.from({ length: nStaves(sec) }, (_, k) => staffSvg(si, k, true, r))) });
+      else if (so.cs !== false) for (let r = 0; r < rows; r++) lay.push({ t: "sys", svgs: [chordStaffSvg(si, true, r)] });
       else for (let r = 0; r < rows; r++) lay.push({ t: "grid", cells: Array.from({ length: 4 }, (_, k) => { const b = r * 4 + k; if (b >= sec.bars.length) return null; const c = sec.bars[b]; return { n: b + 1, x: c ? cName(spell(secTon(sec), c.d, c.s), c.q) : "" }; }) });
     });
   } finally { S.song = keep[0]; S.tonic = keep[1]; S.dict = keep[2]; [LINE, INK, GOLD, CHORD] = old; }
