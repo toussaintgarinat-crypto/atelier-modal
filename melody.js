@@ -92,6 +92,13 @@ const clefOf = v => (v && CLEFS[v.clef] ? v.clef : "sol");
 const nStaves = sec => 1 + (sec.st ? sec.st.length : 0);
 const allMel = sec => [sec.mel || []].concat((sec.st || []).map(x => x.mel || []));
 const hasMel = sec => allMel(sec).some(m => m.length);
+/* instrument d'une portée : v.ins (nom libre) ; une même ligne d'instrument peut occuper plusieurs portées (piano : clé de sol + clé de fa) */
+const INS_PRESETS = ["Thème", "Basse", "Violon", "Alto", "Violoncelle", "Flûte", "Clarinette", "Saxophone", "Trompette", "Piano", "Guitare", "Accompagnement"];
+const insName = (sec, k) => ((vOf(sec, k).ins || "").trim()) || (k === 0 ? "Thème" : "Portée " + (k + 1));
+const songInstruments = () => { const out = []; S.song.sections.forEach(sec => { for (let k = 0; k < nStaves(sec); k++) { const n = insName(sec, k); if (!out.includes(n)) out.push(n); } }); return out; };
+const partStaves = (sec, part) => Array.from({ length: nStaves(sec) }, (_, k) => k).filter(k => insName(sec, k) === part);
+const timbreOf = name => /basse|bass|violoncelle|cello|piano|guitare|harpe/i.test(name) ? "triangle" : /fl[uû]te|clarinette|hautbois/i.test(name) ? "sine" : "sawtooth";
+let PART = "";                                    // partie exportée : "" = morceau entier, "*" = toutes les parties, sinon le nom d'un instrument
 const cv = sec => vOf(sec, ED.si >= 0 && sec === S.song.sections[ED.si] ? Math.min(ED.v, nStaves(sec) - 1) : 0);
 const keyFifths = t => fifths(t) - (S.song.mode === "min" ? 3 : 0);
 const keyAcc = t => {                      // altération de chaque lettre (0 = do … 6 = si) selon l'armure
@@ -311,24 +318,29 @@ function chordRow(sec) {
   const t = secTon(sec);
   return `<div class="pgrid">${sec.bars.map((c, b) => `<div class="pcell"><small>${b + 1}</small><b>${c ? esc(cName(spell(t, c.d, c.s), c.q)) : "&nbsp;"}</b></div>`).join("")}</div>`;
 }
-function printHtml() {
+function printHtml(part) {
+  if (part === "*") return songInstruments().map(p => `<div class="ppart">${printHtml(p)}</div>`).join("");
   const so = S.song, mode = so.mode === "min" ? "mineur" : "majeur";
-  const old = [LINE, INK, GOLD, CHORD]; LINE = "#555"; INK = "#000"; GOLD = "#000"; CHORD = "#000";
+  const old = [LINE, INK, GOLD, CHORD], hadCs = so.cs; LINE = "#555"; INK = "#000"; GOLD = "#000"; CHORD = "#000";
+  if (part) so.cs = true;                           // une partie séparée garde toujours le chiffrage des accords
   try {
     const secs = so.sections.map((sec, si) => {
       const sh = shiftOf(sec);
-      const rows = Math.ceil(sec.bars.length / 4);
-      const body = hasMel(sec)
+      const rows = Math.ceil(sec.bars.length / 4), ks = part ? partStaves(sec, part) : null;
+      const tacet = part && !ks.some(k => (vOf(sec, k).mel || []).length);
+      const body = part
+        ? Array.from({ length: rows }, (_, r) => `<div class="psys">${chordStaffSvg(si, true, r)}${ks.map(k => staffSvg(si, k, true, r)).join("")}</div>`).join("")
+        : hasMel(sec)
         ? Array.from({ length: rows }, (_, r) => `<div class="psys">${so.cs === false ? "" : chordStaffSvg(si, true, r)}${Array.from({ length: nStaves(sec) }, (_, k) => staffSvg(si, k, true, r)).join("")}</div>`).join("")
         : so.cs === false ? chordRow(sec) : Array.from({ length: rows }, (_, r) => `<div class="psys">${chordStaffSvg(si, true, r)}</div>`).join("");
-      return `<section class="psec"><h2>${esc(sec.name)}${(sec.rep || 1) > 1 ? ` <span>×${sec.rep}</span>` : ""}${sh ? ` <span>— en ${esc(nmN(secTon(sec)))} ${mode}</span>` : ""}</h2>${body}</section>`;
+      return `<section class="psec"><h2>${esc(sec.name)}${(sec.rep || 1) > 1 ? ` <span>×${sec.rep}</span>` : ""}${sh ? ` <span>— en ${esc(nmN(secTon(sec)))} ${mode}</span>` : ""}${tacet ? " <span>— silence (accords seuls)</span>" : ""}</h2>${body}</section>`;
     }).join("");
-    return `<h1>${esc(so.name || "Morceau")}</h1><p class="psub">Tonalité : ${esc(nmN(S.tonic))} ${mode} · ${esc(so.sig)} · ♩ = ${so.bpm}</p>${secs}<p class="pfoot">Atelier modal</p>`;
-  } finally { [LINE, INK, GOLD, CHORD] = old; }
+    return `<h1>${esc(so.name || "Morceau")}${part ? ` — ${esc(part)}` : ""}</h1><p class="psub">${part ? `Partie : ${esc(part)} · ` : ""}Tonalité : ${esc(nmN(S.tonic))} ${mode} · ${esc(so.sig)} · ♩ = ${so.bpm}</p>${secs}<p class="pfoot">Atelier modal</p>`;
+  } finally { [LINE, INK, GOLD, CHORD] = old; if (hadCs === undefined) delete so.cs; else so.cs = hadCs; }
 }
 function printScore() {
   let el = $("mel-print"); if (el) el.remove();
-  el = document.createElement("div"); el.id = "mel-print"; el.innerHTML = printHtml(); document.body.appendChild(el);
+  el = document.createElement("div"); el.id = "mel-print"; el.innerHTML = printHtml(PART); document.body.appendChild(el);
   document.body.classList.add("printing");
   const done = () => { document.body.classList.remove("printing"); const e = $("mel-print"); if (e) e.remove(); window.removeEventListener("afterprint", done); };
   window.addEventListener("afterprint", done);
@@ -489,6 +501,7 @@ function themeInner(si, was) {
     const v = vOf(sec, k), act = ed && Math.min(ED.v, nst - 1) === k;
     return `<div class="tr" style="margin-top:6px"><button class="chip sm ${act ? "on2" : ""}" data-act="mel-st" data-si="${si}" data-v="${k}" title="Écrire sur cette portée">Portée ${k + 1}${act ? " ✎" : ""}</button>
       <select data-act="mel-clef" data-si="${si}" data-v="${k}" title="Changer la clé de cette portée">${Object.keys(CLEFS).map(c => `<option value="${c}" ${clefOf(v) === c ? "selected" : ""}>Clé de ${CLEFS[c].n}</option>`).join("")}</select>
+      <input type="text" class="ins" list="ins-list" data-act="ins-name" data-si="${si}" data-v="${k}" value="${esc(v.ins || "")}" placeholder="Instrument (${k === 0 ? "Thème" : "Portée " + (k + 1)})" maxlength="24" size="16" aria-label="Instrument de la portée ${k + 1}" title="Nom de l'instrument qui joue cette portée (sert à exporter sa partie seule)">
       ${k > 0 ? `<button class="chip sm" data-act="mel-delst" data-si="${si}" data-v="${k}">Supprimer</button>` : ""}</div>`;
   }).join("");
   const nrows = Math.ceil(sec.bars.length / perRow());                 // système par système : toutes les portées de la ligne r, puis ses accords
@@ -509,10 +522,11 @@ function themeInner(si, was) {
       <div class="muted" style="margin:6px 0">Une mesure entre « | ». Chaque note : nom + octave + « : » + durée en croches (<code>Eb5:2</code>, noire = 2, blanche = 4). Silence : <code>r:2</code>. Écris Do/Ré/Mi ou C/D/E, avec # ou b.</div>
       <textarea id="mel-t${si}" rows="4" style="width:100%" spellcheck="false" placeholder="r:1 G4:3 G4:2 Bb4:1 C5:1 | …">${esc(toText(sec))}</textarea>
       <div class="tr" style="margin-top:6px"><button class="btn sm" data-act="mel-apply" data-si="${si}">Appliquer</button>
-       <span class="muted" id="mel-m${si}"></span></div></details>`;
+       <span class="muted" id="mel-m${si}"></span></div></details>
+     ${arrHtml(si, sec)}`;
 }
 function refresh() {
-  syncFloat();
+  syncFloat(); syncLabels();
   document.querySelectorAll("#panel .themecard").forEach(d => {
     const si = +d.dataset.si, dt = d.querySelector("details");
     d.innerHTML = themeInner(si, dt ? dt.open : null);
@@ -534,7 +548,9 @@ renderSong = function () {
   if (first && !$("zoomcard")) {
     const z = document.createElement("div"); z.className = "card"; z.id = "zoomcard";
     z.innerHTML = `<div class="tr"><span class="muted">Zoom des sections</span><button class="btn sm sec" data-act="mel-zoom" data-v="-1" ${zi === 0 ? "disabled" : ""}>− Dézoomer</button><b>${Math.round(zoomObj().z * 100)} %</b><button class="btn sm sec" data-act="mel-zoom" data-v="1" ${zi === ZOOMS.length - 1 ? "disabled" : ""}>Zoomer +</button></div>
-     <div class="tr" style="margin-top:8px"><button class="btn sm" data-act="mel-pdf">📄 Enregistrer en PDF / Imprimer</button><button class="chip sm ${S.song.cs === false ? "" : "on2"}" data-act="mel-cs">Portée d’accords</button></div>`;
+     <div class="tr" style="margin-top:8px"><button class="btn sm" data-act="mel-pdf">📄 Enregistrer en PDF / Imprimer</button><button class="chip sm ${S.song.cs === false ? "" : "on2"}" data-act="mel-cs">Portée d’accords</button></div>
+     <div class="tr" id="partbox" style="margin-top:8px">${partHtml()}</div>
+     <datalist id="ins-list">${INS_PRESETS.map(n => `<option value="${esc(n)}"></option>`).join("")}</datalist>`;
     first.closest(".card").before(z);
   }
   const pn = $("panel"); if (pn) { pn.style.setProperty("--cols", zoomObj().c); pn.style.setProperty("--z", zoomObj().z); }
@@ -687,16 +703,179 @@ songTick = function () {
     if (!P.on || S.song.melOff) return r;
     const en = P.seq[P.i]; if (!en) return r;
     const sec = S.song.sections[en.si]; if (!sec || !hasMel(sec)) return r;
-    const hits = [].concat(...allMel(sec)).filter(n => n[0] === en.bi && n[1] === p0);
+    const hits = [];
+    for (let k = 0; k < nStaves(sec); k++) { const w = timbreOf(insName(sec, k)); (vOf(sec, k).mel || []).forEach(n => { if (n[0] === en.bi && n[1] === p0) hits.push([n, w]); }); }
     if (!hits.length) return r;
     const t = shiftOf(sec) ? shiftTon(S.tonic, shiftOf(sec)) : S.tonic;
-    hits.forEach(n => tone(midiOf(t, n), undefined, Math.max(.15, n[2] * 30 / S.song.bpm * .95), .09, "sawtooth"));
+    hits.forEach(([n, w]) => tone(midiOf(t, n), undefined, Math.max(.15, n[2] * 30 / S.song.bpm * .95), .09, w));
   } catch (x) { }
   return r;
 };
 
 const _render = render;
 render = function () { _render.apply(this, arguments); if (S.tab !== "song" && ED.si >= 0) { ED.si = -1; syncFloat(); } };
+
+/* ---------- export d'une partie : un instrument seul, toujours avec le chiffrage des accords ---------- */
+function partHtml() {
+  const ins = songInstruments();
+  if (PART && PART !== "*" && !ins.includes(PART)) PART = "";
+  return `<span class="muted">Exporter :</span><select data-act="part-sel" aria-label="Partie à exporter">
+    <option value="" ${PART === "" ? "selected" : ""}>Le morceau en entier</option>
+    ${ins.map(n => `<option value="${esc(n)}" ${PART === n ? "selected" : ""}>Seulement ${esc(n)} (avec les accords)</option>`).join("")}
+    ${ins.length > 1 ? `<option value="*" ${PART === "*" ? "selected" : ""}>Toutes les parties, une par page</option>` : ""}</select>`;
+}
+function syncLabels(si) {                        // après un changement de nom d'instrument : libellés des listes, sans reconstruire la page
+  const pb = $("partbox"); if (pb) pb.innerHTML = partHtml();
+  document.querySelectorAll("option[data-lab]").forEach(o => {
+    const [a, k] = o.dataset.lab.split(":").map(Number), sec = S.song.sections[a]; if (sec && k < nStaves(sec)) o.textContent = `Portée ${k + 1} · ${insName(sec, k)}`;
+  });
+}
+
+/* ---------- arranger : répartir les notes d'un accord, harmoniser le thème, échanger les lignes ---------- */
+const ARR = {};
+const STEPS = [[2, "Tierce au-dessus"], [-2, "Tierce en dessous"], [3, "Quarte au-dessus"], [-3, "Quarte en dessous"], [4, "Quinte au-dessus"], [-4, "Quinte en dessous"], [5, "Sixte au-dessus"], [-5, "Sixte en dessous"], [7, "Octave au-dessus"], [-7, "Octave en dessous"]];
+const ROLES = ["Fondamentale (do)", "Tierce (mi)", "Quinte (sol)", "Septième (si♭)"];
+const CENTER = { sol: 67, fa: 48, ut3: 60, ut4: 55 };            // hauteur MIDI autour de laquelle on range les notes d'accord, selon la clé
+const STEP_OF = { 0: 0, 3: 2, 4: 2, 5: 3, 6: 4, 7: 4, 9: 5, 10: 6, 11: 6 };        // intervalle en demi-tons -> nombre de lettres au-dessus de la fondamentale
+const clampN = (x, a, b) => Math.max(a, Math.min(b, x));
+function arrCfg(si, sec) {
+  const nb = sec.bars.length, nst = nStaves(sec), c = ARR[si] || (ARR[si] = {});
+  if (!Array.isArray(c.r)) c.r = nst < 2 ? [-1, -1, -1, -1] : [nst - 1, 0, Math.min(1, nst - 1), Math.min(2, nst - 1)];
+  c.r = c.r.map(x => (x >= nst ? -1 : x));
+  c.a = clampN(c.a || 1, 1, nb); c.b = clampN(c.b || nb, c.a, nb);
+  if (!c.rh) c.rh = "w";
+  if (!c.hi) c.hi = -2;
+  c.hs = clampN(c.hs | 0, 0, nst - 1); c.sx = clampN(c.sx | 0, 0, nst - 1);
+  c.sy = c.sy === undefined ? Math.min(1, nst - 1) : clampN(c.sy, 0, nst - 1);
+  if (c.hd === undefined || c.hd >= nst) c.hd = -1;
+  return c;
+}
+function arrHtml(si, sec) {
+  const c = arrCfg(si, sec), nb = sec.bars.length, nst = nStaves(sec);
+  const opts = (from, to, sel) => Array.from({ length: to - from + 1 }, (_, i) => `<option value="${from + i}" ${from + i === sel ? "selected" : ""}>${from + i}</option>`).join("");
+  const stO = (sel, none) => (none ? `<option value="-1" ${sel < 0 ? "selected" : ""}>${none}</option>` : "") + Array.from({ length: nst }, (_, k) => `<option value="${k}" data-lab="${si}:${k}" ${k === sel ? "selected" : ""}>Portée ${k + 1} · ${esc(insName(sec, k))}</option>`).join("");
+  const sel = (f, html, lab) => `<label class="muted">${lab} <select data-act="arr-f" data-si="${si}" data-f="${f}">${html}</select></label>`;
+  return `<details class="arr" data-arr="${si}" ${c.open ? "open" : ""}><summary>🎼 Arranger : répartir les accords, harmoniser le thème, échanger les lignes</summary>
+    <div class="tr" style="margin-top:6px"><span class="muted">Mesures</span>${sel("a", opts(1, nb, c.a), "")}<span class="muted">à</span>${sel("b", opts(c.a, nb, c.b), "")}
+     <label class="muted"><input type="checkbox" data-act="arr-f" data-si="${si}" data-f="over" ${c.over ? "checked" : ""}> remplacer ce qui est déjà écrit sur la portée visée</label></div>
+    <h4>1 · Répartir chaque accord entre les instruments</h4>
+    <div class="muted">Pour chaque note de l’accord, choisis la portée qui la joue (sur un do7 : do à la basse, mi au thème, sol au violon, si♭ à un autre instrument). Les mesures déjà écrites sur la portée visée sont laissées telles quelles.</div>
+    <div class="tr" style="margin-top:4px">${ROLES.map((n, i) => sel("r" + i, stO(c.r[i], "— personne"), n)).join("")}</div>
+    <div class="tr" style="margin-top:4px">${sel("rh", `<option value="w" ${c.rh === "w" ? "selected" : ""}>Tenu toute la mesure</option><option value="b" ${c.rh === "b" ? "selected" : ""}>À chaque temps</option>`, "Jeu")}
+     <button class="btn sm" data-act="arr-chords" data-si="${si}">Répartir sur ces mesures</button>
+     <button class="btn sm sec" data-act="arr-chords-all" data-si="${si}" title="Toutes les mesures de toutes les sections ; les portées manquantes sont créées">Dans toutes les sections</button></div>
+    <h4>2 · Harmoniser le thème (accompagnement à un intervalle)</h4>
+    <div class="muted">Recopie une portée à un intervalle donné, dans la gamme de la tonalité.</div>
+    <div class="tr" style="margin-top:4px">${sel("hs", stO(c.hs), "Source")}${sel("hi", STEPS.map(([v, n]) => `<option value="${v}" ${v === c.hi ? "selected" : ""}>${n}</option>`).join(""), "Intervalle")}
+     ${sel("hd", stO(c.hd, "Nouvelle portée"), "Vers")}
+     <input type="text" class="ins" list="ins-list" data-act="arr-f" data-si="${si}" data-f="hn" value="${esc(c.hn || "")}" placeholder="Instrument (facultatif)" maxlength="24" size="16" aria-label="Instrument de la ligne créée">
+     <button class="btn sm" data-act="arr-harm" data-si="${si}">Harmoniser</button></div>
+    <h4>3 · Échanger deux lignes (les instruments se passent la mélodie)</h4>
+    <div class="tr" style="margin-top:4px">${sel("sx", stO(c.sx), "Entre")}${sel("sy", stO(c.sy), "et")}
+     <button class="btn sm" data-act="arr-swap" data-si="${si}">Échanger sur ces mesures</button></div>
+    ${c.msg ? `<div class="muted arrmsg" style="margin-top:6px">${esc(c.msg)}</div>` : ""}</details>`;
+}
+function shiftDia(n, step) {                      // décale une note {d,s,o} de « step » degrés de la gamme, en gardant son altération éventuelle
+  const SC = S.song.mode === "min" ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11];
+  const alt = mod(n.s - SC[n.d] + 6, 12) - 6, D = n.d + 7 * (n.o + (n.s - alt - SC[n.d]) / 12) + step;
+  const d2 = mod(D, 7), A = SC[d2] + 12 * ((D - d2) / 7) + alt, s2 = mod(A, 12);
+  return { d: d2, s: s2, o: (A - s2) / 12 };
+}
+function chordNote(t, clef, role, ch, iv) {       // note de l'accord (rang 0 = fondamentale…), écrite dans le registre de la clé
+  const root = spell(t, ch.d, ch.s), pc = mod(t.pc + ch.s + iv, 12), ctr = CENTER[clef] - (role === 0 && clef === "fa" ? 5 : 0);
+  return relSpelled(t, mod(root.l + STEP_OF[iv], 7), ctr + mod(pc - ctr + 6, 12) - 6);
+}
+function ensureStaves(sec, k, ref) {              // crée les portées manquantes jusqu'à k, en copiant clé et instrument de la section de référence
+  while (nStaves(sec) <= k && nStaves(sec) < MAXST) { const j = nStaves(sec), o = { clef: clefOf(vOf(ref, j)) }; if (o.clef === "sol") delete o.clef; if (vOf(ref, j).ins) o.ins = vOf(ref, j).ins; (sec.st = sec.st || []).push(o); }
+}
+const busyBar = (list, b, ppb) => list.some(x => x.a < (b + 1) * ppb && x.a + x.n > b * ppb);
+function arrChords(si, c, all) {
+  const ppb = perBar(), ref = S.song.sections[si], beats = S.song.sig === "6/8" ? 2 : ppb / 2, len = ppb / beats;
+  let wrote = 0, kept = 0, nb0 = 0;
+  (all ? S.song.sections : [ref]).forEach(sec => {
+    c.r.forEach(k => { if (k >= 0 && sec !== ref) ensureStaves(sec, k, ref); });
+    const t = secTon(sec), nb = sec.bars.length, lists = {};
+    for (let b = all ? 0 : c.a - 1; b <= (all ? nb - 1 : Math.min(c.b, nb) - 1); b++) {
+      const ch = sec.bars[b]; if (!ch || !CH[ch.q]) continue;
+      const by = {}; CH[ch.q].slice(0, 4).forEach((iv, i) => { const k = c.r[i]; if (k >= 0 && k < nStaves(sec)) (by[k] = by[k] || []).push([i, iv]); });
+      Object.keys(by).forEach(ks => {
+        const k = +ks; let list = lists[k] || toAbs(vOf(sec, k));
+        if (busyBar(list, b, ppb)) { if (!c.over) { kept++; lists[k] = list; return; } list = clearRange(list, b * ppb, (b + 1) * ppb); }
+        by[k].forEach(([i, iv]) => {
+          const rel = chordNote(t, clefOf(vOf(sec, k)), i, ch, iv);
+          if (c.rh === "b") for (let j = 0; j < beats; j++) list.push({ a: b * ppb + j * len, n: len, d: rel.d, s: rel.s, o: rel.o });
+          else list.push({ a: b * ppb, n: ppb, d: rel.d, s: rel.s, o: rel.o });
+          wrote++;
+        });
+        lists[k] = list;
+      });
+    }
+    Object.keys(lists).forEach(k => fromAbs(sec, vOf(sec, +k), lists[k]));
+  });
+  if (!wrote && !kept) return "Rien à répartir : choisis au moins une portée pour une note d’accord, et place des accords dans les mesures.";
+  return `✓ ${wrote} note${wrote > 1 ? "s" : ""} écrite${wrote > 1 ? "s" : ""}.${kept ? ` ${kept} mesure${kept > 1 ? "s" : ""} déjà écrite${kept > 1 ? "s" : ""} laissée${kept > 1 ? "s" : ""} telle${kept > 1 ? "s" : ""} quelle${kept > 1 ? "s" : ""} (coche « remplacer » pour les réécrire).` : ""}`;
+}
+function arrHarm(si, c) {
+  const sec = S.song.sections[si], ppb = perBar(), A = (c.a - 1) * ppb, B = c.b * ppb;
+  if (c.hd === c.hs) return "Choisis une portée de destination différente de la source.";
+  const src = vOf(sec, c.hs), notes = toAbs(src).filter(x => x.a >= A && x.a < B);
+  if (!notes.length) return `La portée ${c.hs + 1} n’a pas de notes sur les mesures ${c.a} à ${c.b}.`;
+  let k = c.hd;
+  if (k < 0) {
+    if (nStaves(sec) >= MAXST) return `Une section ne peut pas avoir plus de ${MAXST} portées : choisis une portée existante.`;
+    const o = { clef: c.hi <= -5 ? "fa" : clefOf(src) }; if (o.clef === "sol") delete o.clef;
+    (sec.st = sec.st || []).push(o); k = nStaves(sec) - 1;
+  }
+  const dv = vOf(sec, k); if (c.hn && c.hn.trim()) dv.ins = c.hn.trim().slice(0, 24);
+  let list = toAbs(dv), wrote = 0, kept = 0, out = 0;
+  if (c.over) list = clearRange(list, A, B);
+  const busy = new Set(); for (let b = c.a - 1; b < c.b; b++) if (busyBar(list, b, ppb)) busy.add(b);
+  notes.forEach(x => {
+    if (busy.has(Math.floor(x.a / ppb))) { kept++; return; }
+    const r = shiftDia(x, c.hi); if (Math.abs(r.o) > 3) { out++; return; }
+    list.push({ a: x.a, n: x.n, d: r.d, s: r.s, o: r.o }); wrote++;
+  });
+  fromAbs(sec, dv, list);
+  c.hd = k;
+  return `✓ ${wrote} note${wrote > 1 ? "s" : ""} harmonisée${wrote > 1 ? "s" : ""} sur la portée ${k + 1} (${insName(sec, k)}).${kept ? ` ${kept} note${kept > 1 ? "s" : ""} non écrite${kept > 1 ? "s" : ""} : mesure déjà occupée.` : ""}${out ? ` ${out} note${out > 1 ? "s" : ""} hors de portée ignorée${out > 1 ? "s" : ""}.` : ""}`;
+}
+function arrSwap(si, c) {
+  const sec = S.song.sections[si], ppb = perBar(), A = (c.a - 1) * ppb, B = c.b * ppb;
+  if (c.sx === c.sy) return "Choisis deux portées différentes.";
+  const cutAt = (list, p) => { const o = []; list.forEach(n => { if (n.a < p && n.a + n.n > p) { o.push(Object.assign({}, n, { n: p - n.a }), Object.assign({}, n, { a: p, n: n.a + n.n - p })); } else o.push(n); }); return o; };
+  const vx = vOf(sec, c.sx), vy = vOf(sec, c.sy), lx = cutAt(cutAt(toAbs(vx), A), B), ly = cutAt(cutAt(toAbs(vy), A), B), inR = n => n.a >= A && n.a < B;
+  fromAbs(sec, vx, lx.filter(n => !inR(n)).concat(ly.filter(inR)));
+  fromAbs(sec, vy, ly.filter(n => !inR(n)).concat(lx.filter(inR)));
+  return `✓ Mesures ${c.a} à ${c.b} échangées entre ${insName(sec, c.sx)} (portée ${c.sx + 1}) et ${insName(sec, c.sy)} (portée ${c.sy + 1}).`;
+}
+document.addEventListener("click", ev => {
+  const t = ev.target.closest("[data-act]"), act = t && t.dataset.act; if (!/^arr-(chords|chords-all|harm|swap)$/.test(act || "")) return;
+  const si = +t.dataset.si, sec = S.song.sections[si]; if (!sec) return;
+  const c = arrCfg(si, sec); c.open = true;
+  c.msg = act === "arr-harm" ? arrHarm(si, c) : act === "arr-swap" ? arrSwap(si, c) : arrChords(si, c, act === "arr-chords-all");
+  persist(); render();
+});
+document.addEventListener("change", ev => {
+  const t = ev.target, k = t.dataset && t.dataset.act;
+  if (k === "part-sel") { PART = t.value; return; }
+  if (k === "ins-name") {                         // nom d'instrument : mis à jour sur place (pas de reconstruction, pour ne pas perdre le clic suivant)
+    const sec = S.song.sections[+t.dataset.si]; if (!sec) return;
+    const v = vOf(sec, +t.dataset.v), n = t.value.trim().slice(0, 24);
+    if (n) v.ins = n; else delete v.ins;
+    persist(); syncLabels(); return;
+  }
+  if (k !== "arr-f") return;
+  const si = +t.dataset.si, sec = S.song.sections[si]; if (!sec) return;
+  const c = arrCfg(si, sec), f = t.dataset.f; c.msg = "";
+  if (f === "over") c.over = t.checked;
+  else if (f === "rh") c.rh = t.value;
+  else if (f === "hn") { c.hn = t.value; return; }
+  else if (/^r\d$/.test(f)) c.r[+f[1]] = +t.value;
+  else c[f] = +t.value;
+  if (f === "a" && c.b < c.a) c.b = c.a;
+  refresh();
+});
+document.addEventListener("toggle", ev => { const d = ev.target; if (d && d.dataset && d.dataset.arr !== undefined) { const c = ARR[+d.dataset.arr]; if (c) c.open = d.open; } }, true);
 
 /* ---------- partition en PDF (pour Google Drive / ZIP) : pages dessinées sur canvas, assemblées en PDF sans bibliothèque ---------- */
 async function makePdf(jpgs) {
@@ -721,7 +900,7 @@ function svgImage(svg) {
   const src = svg.replace(/^<svg ([^>]*?)style="[^"]*"/, "<svg $1").replace("<svg ", `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" `);
   return new Promise((res, rej) => { const im = new Image(); im.onload = () => res({ im, w, h }); im.onerror = () => rej(new Error("Rendu de la partition impossible.")); im.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(src); });
 }
-async function songPdf(entry) {                   // entry = { song, tonic } tel qu'enregistré dans « Morceaux »
+async function songPdf(entry, part) {                   // entry = { song, tonic } tel qu'enregistré dans « Morceaux »
   if (!entry || !validSong(entry.song)) throw new Error("Morceau illisible.");
   /* 1) tout ce qui dépend de l'état de l'application (S.song, S.tonic) est calculé d'un trait, puis l'état est rétabli */
   const keep = [S.song, S.tonic, S.dict], old = [LINE, INK, GOLD, CHORD], lay = [];
@@ -730,11 +909,14 @@ async function songPdf(entry) {                   // entry = { song, tonic } tel
     S.song = Object.assign(newSong(), JSON.parse(JSON.stringify(entry.song)));
     const tt = entry.tonic && TON.find(x => x.l === entry.tonic[0] && x.a === entry.tonic[1]); if (tt) { S.tonic = tt; S.dict = tt; }
     const so = S.song, mode = so.mode === "min" ? "mineur" : "majeur";
-    lay.push({ t: "h1", x: so.name || "Morceau" }, { t: "sub", x: `Tonalité : ${nmN(S.tonic)} ${mode} · ${so.sig} · ♩ = ${so.bpm}` });
+    if (part) so.cs = true;                         // une partie séparée garde toujours le chiffrage des accords
+    lay.push({ t: "h1", x: (so.name || "Morceau") + (part ? " — " + part : "") }, { t: "sub", x: `Tonalité : ${nmN(S.tonic)} ${mode} · ${so.sig} · ♩ = ${so.bpm}` });
     so.sections.forEach((sec, si) => {
       const sh = shiftOf(sec), rows = Math.ceil(sec.bars.length / 4);
-      lay.push({ t: "h2", x: `${sec.name}${(sec.rep || 1) > 1 ? " ×" + sec.rep : ""}${sh ? ` — en ${nmN(secTon(sec))} ${mode}` : ""}` });
-      if (hasMel(sec)) for (let r = 0; r < rows; r++) lay.push({ t: "sys", svgs: (so.cs === false ? [] : [chordStaffSvg(si, true, r)]).concat(Array.from({ length: nStaves(sec) }, (_, k) => staffSvg(si, k, true, r))) });
+      const ks = part ? partStaves(sec, part) : null, tacet = part && !ks.some(k => (vOf(sec, k).mel || []).length);
+      lay.push({ t: "h2", x: `${sec.name}${(sec.rep || 1) > 1 ? " ×" + sec.rep : ""}${sh ? ` — en ${nmN(secTon(sec))} ${mode}` : ""}${tacet ? " — silence (accords seuls)" : ""}` });
+      if (part) for (let r = 0; r < rows; r++) lay.push({ t: "sys", svgs: [chordStaffSvg(si, true, r)].concat(ks.map(k => staffSvg(si, k, true, r))) });
+      else if (hasMel(sec)) for (let r = 0; r < rows; r++) lay.push({ t: "sys", svgs: (so.cs === false ? [] : [chordStaffSvg(si, true, r)]).concat(Array.from({ length: nStaves(sec) }, (_, k) => staffSvg(si, k, true, r))) });
       else if (so.cs !== false) for (let r = 0; r < rows; r++) lay.push({ t: "sys", svgs: [chordStaffSvg(si, true, r)] });
       else for (let r = 0; r < rows; r++) lay.push({ t: "grid", cells: Array.from({ length: 4 }, (_, k) => { const b = r * 4 + k; if (b >= sec.bars.length) return null; const c = sec.bars[b]; return { n: b + 1, x: c ? cName(spell(secTon(sec), c.d, c.s), c.q) : "" }; }) });
     });
@@ -765,6 +947,17 @@ async function songPdf(entry) {                   // entry = { song, tonic } tel
 }
 
 window.__melPdf = songPdf;
+window.__melParts = entry => {                    // instruments d'un morceau enregistré (vide s'il n'y en a qu'un : la partie seule serait identique au morceau)
+  try {
+    if (!entry || !entry.song || !Array.isArray(entry.song.sections)) return [];
+    const out = []; let any = false;
+    entry.song.sections.forEach(sec => {
+      const all = [sec].concat(sec.st || []);
+      all.forEach((v, k) => { if (v && v.mel && v.mel.length) any = true; const n = ((v && v.ins) || "").trim() || (k === 0 ? "Thème" : "Portée " + (k + 1)); if (!out.includes(n)) out.push(n); });
+    });
+    return any && out.length > 1 ? out : [];
+  } catch (x) { return []; }
+};
 window.__mel = { toText, fromText, midiOf, vOf, chordProps, posOf, ED, printHtml };
 if (S.tab === "song") render();
 })();

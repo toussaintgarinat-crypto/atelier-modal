@@ -14,7 +14,7 @@ function encodeSong(song, tonic) {
   const ti = TON.findIndex(t => t.l === tonic.l && t.a === tonic.a);
   const arr = [1, song.name, song.mode, song.bpm, song.sig, song.pstyle, song.gstyle, song.loop ? 1 : 0, ti < 0 ? 0 : ti,
     song.sections.map(s => [s.name, s.rep || 1, s.bars.map(b => b ? b.s + ":" + b.q : ""), s.shift | 0, s.mel && s.mel.length ? s.mel : 0,
-      s.st && s.st.length ? s.st.map(v => [v.clef || "sol", v.mel || []]) : 0, s.clef || 0]), song.cs === false ? 0 : 1];
+      s.st && s.st.length ? s.st.map(v => [v.clef || "sol", v.mel || [], v.ins || 0]) : 0, s.clef || 0, s.ins || 0]), song.cs === false ? 0 : 1];
   return b64e(JSON.stringify(arr));
 }
 function decodeSong(code) {
@@ -40,8 +40,10 @@ function decodeSong(code) {
       const okMel = a => Array.isArray(a) && a.length <= 400 ? a.filter(n => Array.isArray(n) && n.length === 6 && n.every(Number.isInteger) && n[0] >= 0 && n[0] < bars.length && n[1] >= 0 && n[1] < 12 && n[2] >= 1 && n[2] <= 32 && n[3] >= 0 && n[3] < 7 && n[4] >= 0 && n[4] < 12 && Math.abs(n[5]) <= 3) : [];
       const mel = okMel(s[4]); if (mel.length) o.mel = mel;
       if (CL.includes(s[6]) && s[6] !== "sol") o.clef = s[6];
+      const okIns = x => typeof x === "string" && x.trim() ? x.trim().slice(0, 24) : "";
+      if (okIns(s[7])) o.ins = okIns(s[7]);
       if (Array.isArray(s[5])) {
-        const st = s[5].slice(0, 3).filter(v => Array.isArray(v) && CL.includes(v[0])).map(v => { const x = {}; if (v[0] !== "sol") x.clef = v[0]; const m2 = okMel(v[1]); if (m2.length) x.mel = m2; return x; });
+        const st = s[5].slice(0, 3).filter(v => Array.isArray(v) && CL.includes(v[0])).map(v => { const x = {}; if (v[0] !== "sol") x.clef = v[0]; const m2 = okMel(v[1]); if (m2.length) x.mel = m2; if (okIns(v[2])) x.ins = okIns(v[2]); return x; });
         if (st.length) o.st = st;
       }
       return o;

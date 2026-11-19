@@ -93,7 +93,7 @@ svg{display:block;max-width:100%}
 .dg2 svg{height:auto;margin:auto}
 .dg2 button svg[viewBox^="0 0 120"]{width:100px}
 .dg2 small{display:block;color:var(--mu);font-size:11px}
-input.nm,textarea{background:var(--sf2);color:var(--tx);border:1px solid var(--bd);border-radius:9px;padding:7px 9px;font:inherit;font-size:14px}
+input.nm,input.ins,textarea{background:var(--sf2);color:var(--tx);border:1px solid var(--bd);border-radius:9px;padding:7px 9px;font:inherit;font-size:14px}
 input.nm{flex:1;min-width:0}
 textarea{width:100%;min-height:70px;font-size:12px;font-family:ui-monospace,monospace}
 .sug{display:block;width:100%;text-align:left;background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:8px 10px;margin:5px 0;color:var(--tx);font:inherit;font-size:13px}
@@ -152,6 +152,9 @@ body.mel-ed-open{padding-bottom:340px}
 }
 .themecard svg,.melfloat svg{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .psys{break-inside:avoid;margin-bottom:10px}
+.ppart+.ppart{break-before:page;page-break-before:always}
+.arr h4{margin:12px 0 2px;font-size:13px}
+.arr select,.arr input[type=text]{max-width:100%}
 
 .scth{width:84px;height:84px;object-fit:cover;border-radius:10px;border:1px solid var(--bd);background:var(--sf2);cursor:pointer;flex:0 0 auto}
 .scth.pdf{display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--dim);font-size:18px}
