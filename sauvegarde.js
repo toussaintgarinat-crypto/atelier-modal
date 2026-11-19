@@ -9,7 +9,11 @@ const E = s => esc(String(s));
 const K_SONGS = "atelier-modal-songs", K_PL = "atelier-modal-playlists", K_GID = "atelier-modal-gcid";
 const DEFAULT_CLIENT_ID = "909003621424-mpttgr57brn71su2mt4c35cac903a660.apps.googleusercontent.com";                       // identifiant client Google (public) à renseigner une fois créé dans Google Cloud ; sinon chacun peut saisir le sien
 const SCOPE = "https://www.googleapis.com/auth/drive.file", FOLDER = "Atelier modal";
-const BK = { msg: "", busy: false, gmsg: "", gopen: false };
+const BK = { msg: "", busy: false, gmsg: "", gopen: false, sopen: false, lazy: false, ex: { songs: new Set(), pls: new Set(), scores: new Set() } };   // ex = éléments décochés (non sauvegardés)
+const pickSongs = () => { const all = lsGet(K_SONGS) || {}, o = {}; Object.keys(all).forEach(k => { if (!BK.ex.songs.has(k)) o[k] = all[k]; }); return o; };
+const pickPl = () => { const p = lsGet(K_PL); return p && Array.isArray(p.lists) ? Object.assign({}, p, { lists: p.lists.filter(l => l && !BK.ex.pls.has(l.name)) }) : null; };
+const pickScores = async () => (await SCR().listMeta()).filter(m => !BK.ex.scores.has(m.id));
+const sz = n => n > 1048576 ? (n / 1048576).toFixed(1).replace(".", ",") + " Mo" : Math.max(1, Math.round(n / 1024)) + " Ko";
 const SCR = () => window.__scores;
 const clientId = () => { try { return (localStorage.getItem(K_GID) || "").trim() || DEFAULT_CLIENT_ID; } catch (x) { return DEFAULT_CLIENT_ID; } };
 
@@ -59,8 +63,8 @@ const extOf = m => m.type === "application/pdf" ? "pdf" : "jpg";
 const safe = s => String(s || "Partition").replace(/[\\/:*?"<>|\x00-\x1f]+/g, " ").trim().slice(0, 60) || "Partition";
 const hash = t => { let h = 5381; for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) >>> 0; return h.toString(36); };
 /* partitions écrites (thème + portées + accords) : un PDF lisible par morceau enregistré */
-async function songPdfs(say) {
-  const songs = lsGet(K_SONGS) || {}, names = Object.keys(songs).filter(k => songs[k] && validSong(songs[k].song)).slice(0, 300), out = [];
+async function songPdfs(say, songs) {
+  const names = Object.keys(songs).filter(k => songs[k] && validSong(songs[k].song)).slice(0, 300), out = [];
   if (!window.__melPdf) return out;
   for (let i = 0; i < names.length; i++) {
     if (say) say(`Mise en page des partitions… ${i + 1}/${names.length}`);
@@ -70,21 +74,23 @@ async function songPdfs(say) {
 }
 async function collect(say) {
   const S0 = SCR(); if (!S0) throw new Error("Stockage des partitions indisponible.");
-  const meta = await S0.listMeta(), files = [], index = [];
+  const meta = await pickScores(), files = [], index = []; let miss = 0;
   for (const m of meta) {
-    const b = await S0.getBlob(m.id); if (!b) continue;
+    let b = await S0.getBlob(m.id);
+    if (!b && m.off && window.__driveFetch) { if (say) say(`Récupération depuis Drive : ${m.name}…`); try { b = await window.__driveFetch(m); } catch (x) { b = null; } }
+    if (!b) { miss++; continue; }
     const file = `partitions/${safe(m.name)} [${m.id}].${extOf(m)}`;
     files.push({ name: file, blob: b }); index.push(Object.assign({}, m, { file }));
   }
-  const data = { v: 1, saved: new Date().toISOString(), songs: lsGet(K_SONGS) || {}, playlists: lsGet(K_PL) || null };
-  const pdfs = await songPdfs(say); const used = {};
+  const data = { v: 1, saved: new Date().toISOString(), songs: pickSongs(), playlists: pickPl() };
+  const pdfs = await songPdfs(say, data.songs); const used = {};
   pdfs.forEach(p => { let n = safe(p.name); used[n] = (used[n] || 0) + 1; if (used[n] > 1) n += " (" + used[n] + ")"; files.push({ name: `partitions-ecrites/${n}.pdf`, blob: p.blob }); });
   files.unshift({ name: "partitions/index.json", blob: new Blob([JSON.stringify(index)], { type: "application/json" }) });
   files.unshift({ name: "morceaux.json", blob: new Blob([JSON.stringify(data, null, 1)], { type: "application/json" }) });
-  return { files, nSongs: Object.keys(data.songs).length, nScores: index.length, nPdf: pdfs.length };
+  return { files, nSongs: Object.keys(data.songs).length, nScores: index.length, nPdf: pdfs.length, miss };
 }
 const stamp = () => new Date().toISOString().slice(0, 10);
-const summary = c => `${c.nSongs} morceau${c.nSongs > 1 ? "x" : ""}, ${c.nScores} partition${c.nScores > 1 ? "s" : ""}${c.nPdf ? ` et ${c.nPdf} PDF de partitions écrites` : ""}`;
+const summary = c => `${c.nSongs} morceau${c.nSongs > 1 ? "x" : ""}, ${c.nScores} partition${c.nScores > 1 ? "s" : ""}${c.nPdf ? ` et ${c.nPdf} PDF de partitions écrites` : ""}${c.miss ? ` (${c.miss} partition${c.miss > 1 ? "s" : ""} sur Drive seulement non récupérée${c.miss > 1 ? "s" : ""} : connecte Drive et recommence)` : ""}`;
 
 /* ---------- export : fichier ZIP / dossier ---------- */
 function downloadBlob(blob, name) {
@@ -143,10 +149,11 @@ function mergePlaylists(pl) {
   if (add) { if (!(cur.cur >= 0 && cur.cur < cur.lists.length)) cur.cur = 0; lsSet(K_PL, cur); }
   return add;
 }
-async function addScore(meta, blob) {                 // ajoute une partition absente (identifiée par son id)
+async function addScore(meta, blob, driveId) {                 // ajoute une partition absente (identifiée par son id)
   const S0 = SCR(), have = await S0.listMeta();
   if (have.some(x => x.id === meta.id)) return false;
   const m = { id: String(meta.id).slice(0, 40), name: String(meta.name || "Partition").slice(0, 80), type: meta.type === "application/pdf" ? "application/pdf" : "image/jpeg", size: blob.size, added: +meta.added || Date.now(), thumb: typeof meta.thumb === "string" && meta.thumb.startsWith("data:image/") ? meta.thumb : "" };
+  if (driveId) m.drive = driveId;
   if (m.type !== "application/pdf" && !m.thumb) { try { m.thumb = (await S0.prepImage(new File([blob], "x.jpg", { type: blob.type || "image/jpeg" }))).thumb; } catch (x) { } }
   await S0.putItem(m, blob); return true;
 }
@@ -218,24 +225,35 @@ function multipart(meta, blob, type) {
   const b = "am" + Math.random().toString(36).slice(2);
   return { headers: { "Content-Type": `multipart/related; boundary=${b}` }, body: new Blob([`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\nContent-Type: ${type}\r\n\r\n`, blob, `\r\n--${b}--`]) };
 }
+window.__driveFetch = async m => {                       // télécharge à la demande le fichier d'une partition « sur Drive seulement »
+  let id = m.drive;
+  if (!id) { const fid = await folderId(), r = (await listRemote(fid)).find(f => f.appProperties && f.appProperties.amId === m.id); if (!r) throw new Error("Partition introuvable sur ton Drive."); id = r.id; }
+  try { return await (await api(`files/${id}?alt=media`)).blob(); }
+  catch (x) { throw new Error("Impossible de télécharger la partition depuis Drive : " + x.message); }
+};
+window.__driveHas = async id => { try { const f = await (await api(`files/${id}?fields=id,trashed`)).json(); return !!f.id && !f.trashed; } catch (x) { return false; } };
 async function driveBackup(say) {
   say("Connexion à Google…"); const fid = await folderId(); say("Lecture du dossier Drive…");
   const remote = await listRemote(fid), have = new Set(remote.map(f => f.appProperties && f.appProperties.amId).filter(Boolean));
-  const S0 = SCR(), meta = await S0.listMeta(); let up = 0, i = 0;
+  const S0 = SCR(), meta = await pickScores(), idOf = new Map(); let up = 0, i = 0;
+  remote.forEach(f => { const a = f.appProperties && f.appProperties.amId; if (a) idOf.set(a, f.id); });
   for (const m of meta) {
-    i++; if (have.has(m.id)) continue;
+    i++;
+    if (have.has(m.id)) { if (m.drive !== idOf.get(m.id)) await S0.setMeta(Object.assign({}, m, { drive: idOf.get(m.id) })); continue; }
     say(`Envoi des partitions… ${i}/${meta.length}`);
     const b = await S0.getBlob(m.id); if (!b) continue;
     const mp = multipart({ name: `${safe(m.name)}.${extOf(m)}`, parents: [fid], appProperties: { amId: m.id, amName: String(m.name).slice(0, 100), amAdded: String(m.added) } }, b, m.type);
-    await api("files?uploadType=multipart&fields=id", { method: "POST", headers: mp.headers, body: mp.body }, true); up++;
+    const cr = await (await api("files?uploadType=multipart&fields=id", { method: "POST", headers: mp.headers, body: mp.body }, true)).json();
+    await S0.setMeta(Object.assign({}, m, { drive: cr.id })); up++;
   }
   say("Envoi des morceaux…");
-  const songsBlob = new Blob([JSON.stringify({ v: 1, saved: new Date().toISOString(), songs: lsGet(K_SONGS) || {}, playlists: lsGet(K_PL) || null }, null, 1)], { type: "application/json" });
+  const songs = pickSongs();
+  const songsBlob = new Blob([JSON.stringify({ v: 1, saved: new Date().toISOString(), songs, playlists: pickPl() }, null, 1)], { type: "application/json" });
   const old = remote.find(f => f.appProperties && f.appProperties.amKind === "songs");
   const mp = multipart(old ? {} : { name: "morceaux.json", parents: [fid], appProperties: { amKind: "songs" } }, songsBlob, "application/json");
   await api(old ? `files/${old.id}?uploadType=multipart&fields=id` : "files?uploadType=multipart&fields=id", { method: old ? "PATCH" : "POST", headers: mp.headers, body: mp.body }, true);
   /* partitions écrites en PDF : un fichier par morceau, renvoyé seulement s'il a changé */
-  const songs = lsGet(K_SONGS) || {}, nm = Object.keys(songs).filter(k => songs[k] && validSong(songs[k].song)).slice(0, 300); let pdfUp = 0, pdfFail = 0;
+  const nm = Object.keys(songs).filter(k => songs[k] && validSong(songs[k].song)).slice(0, 300); let pdfUp = 0, pdfFail = 0;
   for (let i = 0; i < nm.length; i++) {
     const h = hash(JSON.stringify(songs[nm[i]])), key = hash(nm[i]), prev = remote.find(f => f.appProperties && f.appProperties.amPdf === key);
     if (prev && prev.appProperties.amPdfH === h) continue;
@@ -249,6 +267,17 @@ async function driveBackup(say) {
   const nS = Object.keys(songs).length;
   return `Sauvegarde Google Drive terminée : ${up} nouvelle${up > 1 ? "s" : ""} partition${up > 1 ? "s" : ""} (photos/PDF) envoyée${up > 1 ? "s" : ""}, ${nS} morceau${nS > 1 ? "x" : ""} à jour, ${pdfUp} partition${pdfUp > 1 ? "s" : ""} écrite${pdfUp > 1 ? "s" : ""} (PDF) envoyée${pdfUp > 1 ? "s" : ""}${pdfFail ? ` (${pdfFail} en échec)` : ""}. Dossier « ${FOLDER} » dans ton Drive.`;
 }
+async function driveFree(say) {                        // retire de l'appareil les fichiers déjà sur Drive (vignette gardée)
+  say("Connexion à Google…"); const fid = await folderId(); say("Vérification des copies sur Drive…");
+  const remote = await listRemote(fid), idOf = new Map(); remote.forEach(f => { const a = f.appProperties && f.appProperties.amId; if (a) idOf.set(a, f.id); });
+  const S0 = SCR(), meta = await pickScores(); let n = 0, bytes = 0, keep = 0;
+  for (const m of meta) {
+    if (m.off) continue;
+    if (!idOf.has(m.id)) { keep++; continue; }
+    bytes += m.size || 0; await S0.dropBlob(m.id, idOf.get(m.id)); n++;
+  }
+  return `${n} partition${n > 1 ? "s" : ""} retirée${n > 1 ? "s" : ""} de l’appareil (${sz(bytes)} libérés), toujours sur Drive : la vignette reste et le fichier est téléchargé quand tu l’ouvres.` + (keep ? ` ${keep} pas encore sur Drive : gardée${keep > 1 ? "s" : ""} sur l’appareil (lance d’abord « Sauvegarder sur Drive »).` : "");
+}
 async function driveRestore(say) {
   say("Connexion à Google…"); const fid = await folderId(); say("Lecture du dossier Drive…");
   const remote = await listRemote(fid), S0 = SCR(), local = new Set((await S0.listMeta()).map(m => m.id));
@@ -258,13 +287,26 @@ async function driveRestore(say) {
   const todo = remote.filter(f => f.appProperties && f.appProperties.amId && !local.has(f.appProperties.amId));
   for (const f of todo) {
     n++; say(`Récupération des partitions… ${n}/${todo.length}`);
+    const info = { id: f.appProperties.amId, name: f.appProperties.amName || f.name, type: f.mimeType, added: f.appProperties.amAdded };
+    if (BK.lazy) {                                      // à la demande : on ne crée que la fiche, le fichier reste sur Drive
+      await S0.setMeta({ id: String(info.id).slice(0, 40), name: String(info.name || "Partition").slice(0, 80), type: info.type === "application/pdf" ? "application/pdf" : "image/jpeg", size: +f.size || 0, added: +info.added || Date.now(), thumb: "", drive: f.id, off: true }); sc++; continue;
+    }
     const b = await (await api(`files/${f.id}?alt=media`)).blob();
-    if (await addScore({ id: f.appProperties.amId, name: f.appProperties.amName || f.name, type: f.mimeType, added: f.appProperties.amAdded }, b)) sc++;
+    if (await addScore(info, b, f.id)) sc++;
   }
   return importMsg({ songs, pls, sc });
 }
 
 /* ---------- affichage (dans l'onglet Partitions) ---------- */
+function selUI() {
+  const songs = Object.keys(lsGet(K_SONGS) || {}), pl = ((lsGet(K_PL) || {}).lists || []).map(l => l && l.name).filter(Boolean), sc = SCR() && SCR().items ? SCR().items() : [];
+  const grp = (k, title, rows) => `<div style="margin-top:8px"><b>${title}</b> <span class="muted">(${rows.filter(r => !BK.ex[k].has(r[0])).length}/${rows.length})</span>
+    <button class="btn sm sec" data-act="bk-all" data-k="${k}" data-v="1">tout</button><button class="btn sm sec" data-act="bk-all" data-k="${k}" data-v="0">rien</button>
+    ${rows.length ? rows.map(r => `<label style="display:block;margin:2px 0"><input type="checkbox" data-act="bk-ck" data-k="${k}" data-v="${E(r[0])}" ${BK.ex[k].has(r[0]) ? "" : "checked"}> ${E(r[1])}</label>`).join("") : `<div class="muted">Aucun.</div>`}</div>`;
+  return `<details id="bk-sel" ${BK.sopen ? "open" : ""} style="margin-top:10px"><summary>☑ Choisir ce qui est sauvegardé (tout par défaut)</summary>
+    <div class="muted" style="margin:6px 0">Valable pour l’export et pour Google Drive. Ce qui est décoché n’est ni exporté, ni envoyé.</div>
+    ${grp("songs", "Morceaux", songs.map(n => [n, n]))}${grp("pls", "Playlists", pl.map(n => [n, n]))}${grp("scores", "Partitions (photos / PDF)", sc.map(m => [m.id, m.name + " · " + sz(m.size || 0) + (m.off ? " · ☁" : "")]))}</details>`;
+}
 function fill() {
   const slot = $("bk-slot"); if (!slot) return;
   const dirOk = !!window.showDirectoryPicker, cid = clientId(), origin = /^https?:/.test(location.protocol) ? location.origin : "https://atelier-modal.vercel.app";
@@ -276,9 +318,11 @@ function fill() {
      <input type="file" id="bk-file" data-act="bk-file" accept=".zip,application/zip" style="display:none"></div>
     <div class="muted" style="margin-top:6px">${dirOk ? "<b>Clé USB</b> : branche-la, puis « Vers un dossier / une clé USB » (les photos et PDF y sont lisibles) ou « Exporter tout » (un seul fichier ZIP) et choisis la clé." : "<b>Clé USB</b> : « Exporter tout » crée un seul fichier ZIP. Sur ordinateur, enregistre-le directement sur la clé ; sur téléphone, choisis « Enregistrer dans Fichiers » puis ta clé, ou copie-le plus tard."}</div>
     <div class="muted" id="bk-msg" style="margin-top:6px">${E(BK.msg)}</div>
+    ${selUI()}
     <details id="bk-g" ${BK.gopen ? "open" : ""} style="margin-top:10px"><summary>☁ Google Drive</summary>
-     <div class="muted" style="margin:6px 0">Sauvegarde et restauration dans un dossier « ${FOLDER} » de <b>ton</b> Drive. L’application n’a accès qu’aux fichiers qu’elle y crée, jamais au reste de ton Drive.</div>
-     <div class="tr" style="flex-wrap:wrap;gap:6px"><button class="btn sm" data-act="bk-gsave" ${BK.busy ? "disabled" : ""}>☁ Sauvegarder sur Drive</button><button class="btn sm sec" data-act="bk-grest" ${BK.busy ? "disabled" : ""}>⬇ Restaurer depuis Drive</button></div>
+     <div class="muted" style="margin:6px 0">Sauvegarde et restauration dans un dossier « ${FOLDER} » de <b>ton</b> Drive. Une partition envoyée sur Drive peut être <b>retirée de l’appareil</b> (vignette gardée) : elle est alors téléchargée seulement quand tu l’ouvres. L’application n’a accès qu’aux fichiers qu’elle y crée, jamais au reste de ton Drive.</div>
+     <div class="tr" style="flex-wrap:wrap;gap:6px"><button class="btn sm" data-act="bk-gsave" ${BK.busy ? "disabled" : ""}>☁ Sauvegarder sur Drive</button><button class="btn sm sec" data-act="bk-grest" ${BK.busy ? "disabled" : ""}>⬇ Restaurer depuis Drive</button><button class="btn sm sec" data-act="bk-gfree" ${BK.busy ? "disabled" : ""} title="Retire de l’appareil les partitions déjà sur Drive ; elles se téléchargent à l’ouverture">☁ Libérer la place sur l’appareil</button></div>
+     <label class="muted" style="display:block;margin-top:6px"><input type="checkbox" data-act="bk-lazy" ${BK.lazy ? "checked" : ""}> À la restauration, ne pas télécharger les partitions : les garder sur Drive et les ouvrir à la demande</label>
      <div class="muted" id="bk-gmsg" style="margin-top:6px">${E(BK.gmsg)}</div>
      <details style="margin-top:8px"><summary>Réglage de la connexion Google${cid ? " ✓" : " (à faire une fois)"}</summary>
       <div class="muted" style="margin:6px 0">Il faut un « identifiant client OAuth » Google (gratuit, public). Dans <b>console.cloud.google.com</b> : crée un projet, active l’<b>API Google Drive</b>, configure l’écran de consentement (externe, publié « en production »), puis <i>Identifiants → Créer → ID client OAuth → Application Web</i> avec comme « origine JavaScript autorisée » : <code>${E(origin)}</code>. Colle l’identifiant ici :</div>
@@ -318,15 +362,20 @@ document.addEventListener("click", ev => {
   else if (a === "bk-dir") run("l", exportDir);
   else if (a === "bk-imp") { const f = $("bk-file"); if (f) f.click(); }
   else if (a === "bk-cidsave") { try { localStorage.setItem(K_GID, ($("bk-cid").value || "").trim()); BK.gmsg = "Identifiant enregistré."; } catch (x) { BK.gmsg = "Enregistrement impossible ici."; } BK.gopen = true; fill(); const d = $("bk-g"); if (d) d.open = true; }
+  else if (a === "bk-all") { const k = t.dataset.k, ex = BK.ex[k]; ex.clear(); if (t.dataset.v === "0") { const all = k === "songs" ? Object.keys(lsGet(K_SONGS) || {}) : k === "pls" ? ((lsGet(K_PL) || {}).lists || []).map(l => l && l.name) : SCR().items().map(m => m.id); all.forEach(x => ex.add(x)); } BK.sopen = true; fill(); }
+  else if (a === "bk-gfree") { BK.gopen = true; run("g", driveFree); }
   else if (a === "bk-gsave") { BK.gopen = true; run("g", driveBackup); }
   else if (a === "bk-grest") { BK.gopen = true; run("g", async s => { const m = await driveRestore(s); return m + (/Importé : [1-9]\d* morceau|, \d+ playlist/.test(m) ? " L’application va se recharger." : ""); }).then(() => { const r = /Importé : (\d+) morceau/.exec(BK.gmsg); if (r && +r[1] > 0 || /playlist/.test(BK.gmsg)) setTimeout(() => location.reload(), 2200); }); }
 });
 document.addEventListener("change", ev => {
-  const t = ev.target; if (!t.dataset || t.dataset.act !== "bk-file") return;
+  const t = ev.target;
+  if (t.dataset && t.dataset.act === "bk-ck") { const ex = BK.ex[t.dataset.k]; if (t.checked) ex.delete(t.dataset.v); else ex.add(t.dataset.v); BK.sopen = true; fill(); return; }
+  if (t.dataset && t.dataset.act === "bk-lazy") { BK.lazy = t.checked; return; }
+  if (!t.dataset || t.dataset.act !== "bk-file") return;
   const f = t.files && t.files[0]; t.value = ""; if (!f) return;
   run("l", async s => { s("Lecture de la sauvegarde…"); const r = await importZip(f); reloadSoon(r); return importMsg(r) + (r.songs.add || r.pls ? " L’application va se recharger." : ""); });
 });
-document.addEventListener("toggle", ev => { if (ev.target && ev.target.id === "bk-g") BK.gopen = ev.target.open; }, true);
+document.addEventListener("toggle", ev => { if (ev.target && ev.target.id === "bk-g") BK.gopen = ev.target.open; if (ev.target && ev.target.id === "bk-sel") BK.sopen = ev.target.open; }, true);
 
 window.__backup = { makeZip, readZip, collect, importZip, crc32 };
 if (S.tab === "scores" || S.tab === "song") render();
