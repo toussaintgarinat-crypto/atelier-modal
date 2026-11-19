@@ -96,24 +96,51 @@ async function shareItem(id) {
   }
   download(b, fileNameOf(m)); SC.msg = "Le partage direct n’est pas disponible ici : le fichier a été téléchargé, tu peux l’envoyer depuis tes téléchargements."; renderScores();
 }
+/* PDF : pdf.js (chargé à la demande depuis cdnjs, puis gardé hors ligne par le service worker) dessine chaque page ; on peut alors la découper comme une photo */
+const PDFJS = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js", PDFW = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+function pdfLib() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  return new Promise((res, rej) => {
+    const sc = document.createElement("script"); sc.src = PDFJS;
+    sc.onload = () => { try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFW; res(window.pdfjsLib); } catch (x) { rej(x); } };
+    sc.onerror = () => rej(new Error("Lecteur PDF indisponible (connexion internet nécessaire la première fois)."));
+    document.head.appendChild(sc);
+  });
+}
+async function renderPdfPage(v, n) {
+  const pg = await v.doc.getPage(n), v0 = pg.getViewport({ scale: 1 }), vp = pg.getViewport({ scale: Math.min(3, 2400 / Math.max(v0.width, v0.height)) });
+  const cv = document.createElement("canvas"); cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+  const cx = cv.getContext("2d"); cx.fillStyle = "#fff"; cx.fillRect(0, 0, cv.width, cv.height);
+  await pg.render({ canvasContext: cx, viewport: vp }).promise;
+  const blob = await toBlob(cv, .9); if (v.url) URL.revokeObjectURL(v.url);
+  v.blob = blob; v.url = URL.createObjectURL(blob); v.page = n;
+}
+function showView() { const d = document.createElement("div"); d.id = "scview"; d.className = "scview"; document.body.appendChild(d); drawView(); }
 async function openItem(id) {
   const m = SC.items.find(x => x.id === id); if (!m) return;
   const b = await getBlob(id); if (!b) return;
   if (m.type === "application/pdf") {
-    const u = URL.createObjectURL(new Blob([b], { type: "application/pdf" })), w = window.open(u, "_blank");
-    if (!w) { download(b, fileNameOf(m)); SC.msg = "Ton navigateur a bloqué l’ouverture : le PDF a été téléchargé."; renderScores(); }
-    setTimeout(() => URL.revokeObjectURL(u), 60000);
+    try {
+      const lib = await pdfLib(), doc = await lib.getDocument({ data: await b.arrayBuffer() }).promise;
+      closeView(); SC.view = { id, z: 1, url: "", name: m.name, doc, pages: doc.numPages, page: 1 };
+      await renderPdfPage(SC.view, 1); showView();
+    } catch (x) {                                          // pas de lecteur intégré : on ouvre le PDF dans le navigateur, comme avant
+      const u = URL.createObjectURL(new Blob([b], { type: "application/pdf" })), w = window.open(u, "_blank");
+      if (!w) { download(b, fileNameOf(m)); SC.msg = "Ton navigateur a bloqué l’ouverture : le PDF a été téléchargé."; renderScores(); }
+      setTimeout(() => URL.revokeObjectURL(u), 60000);
+    }
     return;
   }
   closeView();
   SC.view = { id, z: 1, url: URL.createObjectURL(b), name: m.name };
-  const d = document.createElement("div"); d.id = "scview"; d.className = "scview"; document.body.appendChild(d); drawView();
+  showView();
 }
 function drawView() {
   const d = $("scview"); if (!d || !SC.view) return;
   const v = SC.view, pl = window.__pl, names = pl ? pl.names() : [];
   d.innerHTML = `<div class="scbar"><b style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(v.name)}</b>
     <button class="btn sm sec" data-act="sc-zoom" data-v="-1">−</button><span>${Math.round(v.z * 100)} %</span><button class="btn sm sec" data-act="sc-zoom" data-v="1">+</button>
+    ${v.pages > 1 ? `<button class="btn sm sec" data-act="sc-page" data-v="-1" ${v.page <= 1 ? "disabled" : ""}>‹</button><span>p. ${v.page}/${v.pages}</span><button class="btn sm sec" data-act="sc-page" data-v="1" ${v.page >= v.pages ? "disabled" : ""}>›</button>` : ""}
     <button class="btn sm ${v.cut ? "" : "sec"}" data-act="sc-cut" title="Découper une partie de la partition">✂ Découper</button>
     <button class="btn sm" data-act="sc-close">Fermer</button></div>
    ${v.cut ? `<div class="scbar" style="flex-wrap:wrap"><span class="muted" style="flex:1;min-width:160px">${v.cut.r ? "Zone choisie : tu peux la refaire." : "Trace un rectangle sur la partition avec le doigt ou la souris."}</span>
@@ -148,18 +175,18 @@ function wireCrop() {
 }
 async function cropSelection() {                 // la zone choisie devient une nouvelle partition (photo), gardée dans Partitions
   const v = SC.view, r = v && v.cut && v.cut.r; if (!r) throw new Error("Trace d’abord un rectangle.");
-  const src = await getBlob(v.id), im = await loadImg(src);
+  const src = v.blob || await getBlob(v.id), im = await loadImg(src);
   const x = Math.round(Math.min(r.x0, r.x1) * im.naturalWidth), y = Math.round(Math.min(r.y0, r.y1) * im.naturalHeight);
   const w = Math.max(8, Math.round(Math.abs(r.x1 - r.x0) * im.naturalWidth)), h = Math.max(8, Math.round(Math.abs(r.y1 - r.y0) * im.naturalHeight));
   const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
   cv.getContext("2d").drawImage(im, x, y, w, h, 0, 0, w, h);
   const p = await prepImage(new File([await toBlob(cv, .92)], "x.jpg", { type: "image/jpeg" }));
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  const meta = { id, name: (v.name + " (extrait)").slice(0, 80), type: "image/jpeg", size: p.blob.size, added: Date.now(), thumb: p.thumb };
+  const meta = { id, name: (v.name + (v.pages ? " p." + v.page : "") + " (extrait)").slice(0, 80), type: "image/jpeg", size: p.blob.size, added: Date.now(), thumb: p.thumb };
   await putItem(meta, p.blob); await reload();
   return meta;
 }
-function closeView() { if (SC.view) { URL.revokeObjectURL(SC.view.url); SC.view = null; } const d = $("scview"); if (d) d.remove(); }
+function closeView() { if (SC.view) { if (SC.view.url) URL.revokeObjectURL(SC.view.url); try { if (SC.view.doc) SC.view.doc.destroy(); } catch (x) { } SC.view = null; } const d = $("scview"); if (d) d.remove(); }
 
 /* ---------- écran ---------- */
 function renderScores() {
@@ -211,6 +238,10 @@ document.addEventListener("click", ev => {
     delItem(id).then(() => { SC.msg = "Partition supprimée."; return reload(); });
   }
   else if (a === "sc-pl") { const pl = window.__pl; if (pl) { const n = pl.add("@score:" + id); const m = SC.items.find(x => x.id === id); SC.msg = `« ${m ? m.name : "Partition"} » ajoutée à la playlist « ${n} ».`; renderScores(); } }
+  else if (a === "sc-page") {
+    const v = SC.view; if (!v || !v.doc) return; const n = Math.max(1, Math.min(v.pages, v.page + +t.dataset.v)); if (n === v.page) return;
+    renderPdfPage(v, n).then(() => { if (SC.view === v) { if (v.cut) v.cut.r = null; v.msg = ""; drawView(); } });
+  }
   else if (a === "sc-cut") { if (SC.view) { SC.view.cut = SC.view.cut ? null : { r: null, pl: -1 }; SC.view.msg = ""; drawView(); } }
   else if (a === "sc-cutok" || a === "sc-cutpl") {
     if (!SC.view || !SC.view.cut) return;
