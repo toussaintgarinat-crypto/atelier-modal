@@ -74,13 +74,14 @@ function setZoom(n) { zi = Math.max(0, Math.min(ZOOMS.length - 1, n)); try { loc
 /* ---------- éditeur : portée + clavier à l'écran ---------- */
 /* Position = pulsation absolue dans la section (mesure × pulsations par mesure + pulsation). Saisie en « écrasement » :
    une note posée remplace ce qui occupait sa durée, puis le curseur avance. */
-const ED = { si: -1, v: 0, stack: false, pos: 0, dur: 2, acc: "auto", base: 60, click: "note", stAcc: "", collapsed: false, fp: null };
+const ED = { si: -1, v: 0, grew: false, stack: false, pos: 0, dur: 2, acc: "auto", base: 60, click: "note", stAcc: "", collapsed: false, fp: null };
 const K_KB = "atelier-modal-kbpos";
 try { const v = JSON.parse(localStorage.getItem(K_KB)); if (v && Number.isFinite(v.x) && Number.isFinite(v.y)) ED.fp = v; } catch (x) { }
 const DURS = [[1, "Croche"], [2, "Noire"], [3, "Noire ·"], [4, "Blanche"], [6, "Blanche ·"], [8, "Ronde"]], GLY = [8, 6, 4, 3, 2, 1];
 const SHARP_POS = [8, 5, 9, 6, 3, 7, 4], FLAT_POS = [4, 7, 3, 6, 2, 5, 1];       // position des altérations à la clé (0 = ligne du bas)
 const SHARP_L = [3, 0, 4, 1, 5, 2, 6], FLAT_L = [6, 2, 5, 1, 4, 0, 3];
-const BW = 132, ROWH = 108, LINE = "#8b98a5", INK = "#e8eef4", GOLD = "#f5b13d";
+const BW = 132, ROWH = 108, CHH = 64;
+let LINE = "#8b98a5", INK = "#e8eef4", GOLD = "#f5b13d", CHORD = "#cdd8ff";          // couleurs de la portée (clair sur fond sombre ; inversées à l'impression)
 /* clés : bot = rang diatonique (octave×7 + lettre) de la ligne du bas ; base = première touche proposée au clavier ;
    sw / fw = position la plus basse des dièses / bémols à la clé */
 const CLEFS = { sol: { n: "Sol", bot: 30, base: 60, sw: 3, fw: 1 }, fa: { n: "Fa", bot: 18, base: 36, sw: 1, fw: 0 },
@@ -131,8 +132,11 @@ function clearRange(list, pos, end) {
   return out;
 }
 function putNote(sec, v, rel, len) {
-  const total = sec.bars.length * perBar(), pos = ED.pos;
-  if (pos >= total) return;
+  let total = sec.bars.length * perBar(); const pos = ED.pos;
+  if (pos >= total) {                      // curseur au bout de la section : on ajoute une mesure pour continuer à écrire
+    if (sec.bars.length >= 96) return;
+    sec.bars.push(null); total += perBar(); ED.grew = true;
+  }
   len = Math.min(len, total - pos);
   if (ED.stack) {                       // « Empiler » : on ajoute une note sur la même position (accord), sans rien effacer ni avancer
     if (!rel) return;
@@ -213,8 +217,8 @@ function clefSvg(clef, y0) {
   return `<rect x="6" y="${yc - 16}" width="4" height="32" fill="${INK}"/><rect x="12" y="${yc - 16}" width="1.4" height="32" fill="${INK}"/>
     <path d="M15 ${yc - 16}C28 ${yc - 16} 28 ${yc - 3} 16 ${yc - 1.5}M15 ${yc + 16}C28 ${yc + 16} 28 ${yc + 3} 16 ${yc + 1.5}" ${st} stroke-width="2.4"/>`;
 }
-function staffSvg(si, k) {
-  const PER = perRow();
+function staffSvg(si, k, print, rowSel) {
+  const PER = print ? 4 : perRow();
   const sec = S.song.sections[si], v = vOf(sec, k || 0), clef = clefOf(v), bot = CLEFS[clef].bot, t = secTon(sec), nb = sec.bars.length, ppb = perBar(), total = nb * ppb;
   const f = keyFifths(t), nk = Math.abs(f) <= 7 ? Math.abs(f) : 0, X0 = 40 + nk * 7, W = X0 + PER * BW + 6, rows = Math.ceil(nb / PER);
   const kacc = keyAcc(t);
@@ -224,8 +228,9 @@ function staffSvg(si, k) {
   const cov = new Array(total).fill(false);
   notes.forEach(x => { for (let i = x.a; i < Math.min(total, x.a + x.n); i++) cov[i] = true; });
   let g = "";
-  for (let r = 0; r < rows; r++) {
-    const y0 = r * ROWH;
+  const R0 = rowSel === undefined ? 0 : rowSel, RN = rowSel === undefined ? rows : 1, inSel = a => rowSel === undefined || rowOf(a) === rowSel, ry = a => (rowOf(a) - R0) * ROWH;
+  for (let r = R0; r < R0 + RN; r++) {
+    const y0 = (r - R0) * ROWH;
     for (let i = 0; i < 5; i++) g += `<line x1="4" x2="${X0 + PER * BW}" y1="${y0 + 40 + 8 * i}" y2="${y0 + 40 + 8 * i}" stroke="${LINE}"/>`;
     g += `<line x1="4" x2="4" y1="${y0 + 40}" y2="${y0 + 72}" stroke="${LINE}" stroke-width="1.5"/>`;
     g += clefSvg(clef, y0);
@@ -234,7 +239,7 @@ function staffSvg(si, k) {
       const b = r * PER + k; if (b >= nb) break;
       const x0 = X0 + k * BW, c = sec.bars[b];
       g += `<line x1="${x0 + BW}" x2="${x0 + BW}" y1="${y0 + 40}" y2="${y0 + 72}" stroke="${LINE}" stroke-width="${b === nb - 1 ? 2.5 : 1.2}"/>`;
-      if (c) g += `<text x="${x0 + 4}" y="${y0 + 15}" font-size="12" font-weight="700" fill="#cdd8ff">${esc(cName(spell(t, c.d, c.s), c.q))}</text>`;
+      if (c && S.song.cs === false) g += `<text x="${x0 + 4}" y="${y0 + 15}" font-size="12" font-weight="700" fill="${CHORD}">${esc(cName(spell(t, c.d, c.s), c.q))}</text>`;
       g += `<text x="${x0 + 3}" y="${y0 + 30}" font-size="8" fill="${LINE}">${b + 1}</text>`;
     }
   }
@@ -242,7 +247,7 @@ function staffSvg(si, k) {
   for (let a = 0; a < total;) {
     if (cov[a]) { a++; continue; }
     let e = a; while (e < total && !cov[e]) e++;
-    split(a, e - a, ppb).forEach(p => { g += drawRest(xAt(p.a) + 8, rowOf(p.a) * ROWH, p.g); });
+    split(a, e - a, ppb).forEach(p => { if (inSel(p.a)) g += drawRest(xAt(p.a) + 8, ry(p.a), p.g); });
     a = e;
   }
   /* notes (coupées aux barres de mesure, reliées par une liaison) */
@@ -252,23 +257,84 @@ function staffSvg(si, k) {
     let prev = null;
     split(x.a, Math.min(x.n, total - x.a), ppb).forEach((p, i) => {
       const px = xAt(p.a) + 8, row = rowOf(p.a);
-      g += drawNote(px, row * ROWH, pos, p.g, i === 0 ? acc : "");
-      if (prev && prev.row === row) { const y = yOf(row * ROWH, pos) + (pos < 4 ? 9 : -9); g += `<path d="M${prev.x + 4} ${y}Q${(prev.x + px) / 2} ${y + (pos < 4 ? 7 : -7)} ${px - 4} ${y}" fill="none" stroke="${INK}" stroke-width="1.3"/>`; }
+      if (!inSel(p.a)) { prev = null; return; }
+      g += drawNote(px, ry(p.a), pos, p.g, i === 0 ? acc : "");
+      if (prev && prev.row === row) { const y = yOf(ry(p.a), pos) + (pos < 4 ? 9 : -9); g += `<path d="M${prev.x + 4} ${y}Q${(prev.x + px) / 2} ${y + (pos < 4 ? 7 : -7)} ${px - 4} ${y}" fill="none" stroke="${INK}" stroke-width="1.3"/>`; }
       prev = { x: px, row };
     });
   });
   /* curseur */
-  if (ED.si === si && ED.v === (k || 0)) {
+  if (!print && ED.si === si && ED.v === (k || 0)) {
     const cp = Math.min(ED.pos, total), cb = Math.min(Math.floor(cp / ppb), nb - 1), cx = cp >= total ? X0 + (cb % PER + 1) * BW : xAt(cp), y0 = Math.floor(cb / PER) * ROWH;
     g += `<line x1="${cx}" x2="${cx}" y1="${y0 + 28}" y2="${y0 + 84}" stroke="${GOLD}" stroke-width="2"/><path d="M${cx - 4} ${y0 + 24}h8l-4 6z" fill="${GOLD}"/>`;
   }
   /* zones cliquables : une par pulsation */
-  for (let a = 0; a < total; a++) {
+  for (let a = 0; a < (print ? 0 : total); a++) {
     const row = rowOf(a);
     g += `<rect x="${xAt(a)}" y="${row * ROWH}" width="${BW / ppb}" height="${ROWH}" fill="transparent" data-act="mel-pos" data-si="${si}" data-v="${k || 0}" data-pos="${a}" style="cursor:pointer"/>`;
   }
-  return `<svg viewBox="0 0 ${W} ${rows * ROWH}" style="width:${zoomObj().z > 1 ? zoomObj().z * 100 : 100}%;height:auto;display:block" role="img" aria-label="Portée ${(k || 0) + 1} du thème, clé de ${CLEFS[clef].n}">${g}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${RN * ROWH}" style="width:${!print && zoomObj().z > 1 ? zoomObj().z * 100 : 100}%;height:auto;display:block" role="img" aria-label="Portée ${(k || 0) + 1} du thème, clé de ${CLEFS[clef].n}">${g}</svg>`;
 }
+/* portée d'accords façon recueil de jazz : symbole, une barre oblique par temps, « % » quand l'accord se répète */
+function chordStaffSvg(si, print, rowSel) {
+  const PER = print ? 4 : perRow(), sec = S.song.sections[si], t = secTon(sec), nb = sec.bars.length, ppb = perBar();
+  const f = keyFifths(t), nk = Math.abs(f) <= 7 ? Math.abs(f) : 0, X0 = 40 + nk * 7, W = X0 + PER * BW + 6, rows = Math.ceil(nb / PER);
+  const beats = S.song.sig === "6/8" ? 2 : ppb / 2;
+  let g = "";
+  const R0 = rowSel === undefined ? 0 : rowSel, RN = rowSel === undefined ? rows : 1;
+  for (let r = R0; r < R0 + RN; r++) {
+    const y0 = (r - R0) * CHH, Y0 = y0 - 24;                       // Y0 : repère de clefSvg / yOf, dont les lignes sont à Y0+40…Y0+72
+    for (let i = 0; i < 5; i++) g += `<line x1="4" x2="${X0 + PER * BW}" y1="${y0 + 16 + 8 * i}" y2="${y0 + 16 + 8 * i}" stroke="${LINE}"/>`;
+    g += `<line x1="4" x2="4" y1="${y0 + 16}" y2="${y0 + 48}" stroke="${LINE}" stroke-width="1.5"/>`;
+    g += clefSvg("fa", Y0);
+    for (let i = 0; i < nk; i++) g += `<text x="${34 + i * 7}" y="${yOf(Y0, sigPos("fa", i, f > 0)) + 5}" font-size="15" fill="${INK}" text-anchor="middle">${f > 0 ? "♯" : "♭"}</text>`;
+    for (let k = 0; k < PER; k++) {
+      const b = r * PER + k; if (b >= nb) break;
+      const x0 = X0 + k * BW, c = sec.bars[b], pv = b > 0 ? sec.bars[b - 1] : null;
+      g += `<line x1="${x0 + BW}" x2="${x0 + BW}" y1="${y0 + 16}" y2="${y0 + 48}" stroke="${LINE}" stroke-width="${b === nb - 1 ? 2.5 : 1.2}"/>`;
+      if (!c) continue;
+      if (pv && pv.s === c.s && pv.q === c.q) {
+        const cx = x0 + BW / 2, y = y0 + 32;
+        g += `<path d="M${cx - 7} ${y + 6}L${cx + 7} ${y - 6}" stroke="${INK}" stroke-width="3"/><circle cx="${cx - 7}" cy="${y - 4}" r="2" fill="${INK}"/><circle cx="${cx + 7}" cy="${y + 4}" r="2" fill="${INK}"/>`;
+        continue;
+      }
+      g += `<text x="${x0 + 4}" y="${y0 + 11}" font-size="14" font-weight="700" fill="${CHORD}">${esc(cName(spell(t, c.d, c.s), c.q))}</text>`;
+      for (let i = 0; i < beats; i++) { const cx = x0 + (i + .5) * BW / beats; g += `<path d="M${cx - 4} ${y0 + 37}L${cx + 4} ${y0 + 27}" stroke="${INK}" stroke-width="3"/>`; }
+    }
+  }
+  return `<svg viewBox="0 0 ${W} ${RN * CHH - 12}" style="width:${!print && zoomObj().z > 1 ? zoomObj().z * 100 : 100}%;height:auto;display:block" role="img" aria-label="Portée d’accords">${g}</svg>`;
+}
+
+/* ---------- partition imprimable / PDF ---------- */
+/* On prépare une page blanche (#mel-print) que le CSS d'impression affiche seule ; le navigateur propose « Enregistrer en PDF ». */
+function chordRow(sec) {
+  const t = secTon(sec);
+  return `<div class="pgrid">${sec.bars.map((c, b) => `<div class="pcell"><small>${b + 1}</small><b>${c ? esc(cName(spell(t, c.d, c.s), c.q)) : "&nbsp;"}</b></div>`).join("")}</div>`;
+}
+function printHtml() {
+  const so = S.song, mode = so.mode === "min" ? "mineur" : "majeur";
+  const old = [LINE, INK, GOLD, CHORD]; LINE = "#555"; INK = "#000"; GOLD = "#000"; CHORD = "#000";
+  try {
+    const secs = so.sections.map((sec, si) => {
+      const sh = shiftOf(sec);
+      const rows = Math.ceil(sec.bars.length / 4);
+      const body = hasMel(sec)
+        ? Array.from({ length: rows }, (_, r) => `<div class="psys">${Array.from({ length: nStaves(sec) }, (_, k) => staffSvg(si, k, true, r)).join("")}${so.cs === false ? "" : chordStaffSvg(si, true, r)}</div>`).join("")
+        : chordRow(sec);
+      return `<section class="psec"><h2>${esc(sec.name)}${(sec.rep || 1) > 1 ? ` <span>×${sec.rep}</span>` : ""}${sh ? ` <span>— en ${esc(nmN(secTon(sec)))} ${mode}</span>` : ""}</h2>${body}</section>`;
+    }).join("");
+    return `<h1>${esc(so.name || "Morceau")}</h1><p class="psub">Tonalité : ${esc(nmN(S.tonic))} ${mode} · ${esc(so.sig)} · ♩ = ${so.bpm}</p>${secs}<p class="pfoot">Atelier modal</p>`;
+  } finally { [LINE, INK, GOLD, CHORD] = old; }
+}
+function printScore() {
+  let el = $("mel-print"); if (el) el.remove();
+  el = document.createElement("div"); el.id = "mel-print"; el.innerHTML = printHtml(); document.body.appendChild(el);
+  document.body.classList.add("printing");
+  const done = () => { document.body.classList.remove("printing"); const e = $("mel-print"); if (e) e.remove(); window.removeEventListener("afterprint", done); };
+  window.addEventListener("afterprint", done);
+  try { window.print(); } catch (x) { done(); alert("L’impression n’est pas disponible ici : ouvre l’application dans ton navigateur."); }
+}
+
 function keyboardSvg(si) {
   const t = secTon(S.song.sections[si]);
   let w = "", b = "", wi = 0;
@@ -394,6 +460,9 @@ function themeInner(si, was) {
       <button class="btn sm" data-act="mel-edit" data-si="${si}">${ed ? "Fermer la saisie" : "✎ Écrire le thème sur la portée"}</button>
       ${has ? `<button class="btn sm sec" data-act="mel-clear" data-si="${si}">Effacer</button>` : ""}</div>
      ${staves}
+     ${S.song.cs === false ? "" : `<div style="overflow-x:auto;margin-top:6px">${chordStaffSvg(si)}</div>`}
+     <div class="tr" style="margin-top:6px"><button class="btn sm sec" data-act="mel-addrow" data-si="${si}">+ 2 mesures</button>
+      <button class="btn sm sec" data-act="delbar" data-si="${si}" title="Retire la dernière mesure">− mesure</button><span class="muted">${sec.bars.length} mesures</span></div>
      <div class="tr" style="margin-top:6px">${nst < MAXST ? `<button class="btn sm sec" data-act="mel-addst" data-si="${si}">+ Ajouter une portée</button>` : ""}
       <span class="muted">Clic droit (ou appui long) sur une note : la retirer.</span></div>
      ${ed ? propsHtml(si) : ""}
@@ -425,7 +494,8 @@ renderSong = function () {
   const first = document.querySelector('#panel input[data-act="secname"]');
   if (first && !$("zoomcard")) {
     const z = document.createElement("div"); z.className = "card"; z.id = "zoomcard";
-    z.innerHTML = `<div class="tr"><span class="muted">Zoom des sections</span><button class="btn sm sec" data-act="mel-zoom" data-v="-1" ${zi === 0 ? "disabled" : ""}>− Dézoomer</button><b>${Math.round(zoomObj().z * 100)} %</b><button class="btn sm sec" data-act="mel-zoom" data-v="1" ${zi === ZOOMS.length - 1 ? "disabled" : ""}>Zoomer +</button></div>`;
+    z.innerHTML = `<div class="tr"><span class="muted">Zoom des sections</span><button class="btn sm sec" data-act="mel-zoom" data-v="-1" ${zi === 0 ? "disabled" : ""}>− Dézoomer</button><b>${Math.round(zoomObj().z * 100)} %</b><button class="btn sm sec" data-act="mel-zoom" data-v="1" ${zi === ZOOMS.length - 1 ? "disabled" : ""}>Zoomer +</button></div>
+     <div class="tr" style="margin-top:8px"><button class="btn sm" data-act="mel-pdf">📄 Enregistrer en PDF / Imprimer</button><button class="chip sm ${S.song.cs === false ? "" : "on2"}" data-act="mel-cs">Portée d’accords</button></div>`;
     first.closest(".card").before(z);
   }
   const pn = $("panel"); if (pn) { pn.style.setProperty("--cols", zoomObj().c); pn.style.setProperty("--z", zoomObj().z); }
@@ -443,6 +513,13 @@ document.addEventListener("click", ev => {
   const t = ev.target.closest("[data-act]"); if (!t || !/^mel-/.test(t.dataset.act)) return;
   if (Date.now() - lastTouchRm < 800) return;
   const act = t.dataset.act, sec = S.song.sections[ED.si >= 0 ? ED.si : +t.dataset.si], si = +t.dataset.si;
+  if (act === "mel-pdf") { printScore(); return; }
+  if (act === "mel-cs") { if (S.song.cs === false) delete S.song.cs; else S.song.cs = false; persist(); render(); return; }
+  if (act === "mel-addrow") {
+    const s2 = S.song.sections[si]; if (!s2) return;
+    for (let i = 0; i < perRow() && s2.bars.length < 96; i++) s2.bars.push(null);
+    persist(); render(); return;
+  }
   if (act === "mel-zoom") { setZoom(zi + +t.dataset.v); return; }
   if (act === "mel-voice") { S.song.melOff = !S.song.melOff; if (!S.song.melOff) delete S.song.melOff; persist(); render(); return; }
   if (act === "mel-edit") {
@@ -507,7 +584,7 @@ document.addEventListener("click", ev => {
     tone(m, undefined, .5, .12, "sawtooth");
     putNote(sec, cv(sec), relOf(secTon(sec), m), ED.dur); persist();
   }
-  refresh();
+  if (ED.grew) { ED.grew = false; render(); } else refresh();
 });
 
 document.addEventListener("change", ev => {
@@ -582,6 +659,6 @@ songTick = function () {
 const _render = render;
 render = function () { _render.apply(this, arguments); if (S.tab !== "song" && ED.si >= 0) { ED.si = -1; syncFloat(); } };
 
-window.__mel = { toText, fromText, midiOf, vOf, chordProps, posOf, ED };
+window.__mel = { toText, fromText, midiOf, vOf, chordProps, posOf, ED, printHtml };
 if (S.tab === "song") render();
 })();

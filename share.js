@@ -14,7 +14,7 @@ function encodeSong(song, tonic) {
   const ti = TON.findIndex(t => t.l === tonic.l && t.a === tonic.a);
   const arr = [1, song.name, song.mode, song.bpm, song.sig, song.pstyle, song.gstyle, song.loop ? 1 : 0, ti < 0 ? 0 : ti,
     song.sections.map(s => [s.name, s.rep || 1, s.bars.map(b => b ? b.s + ":" + b.q : ""), s.shift | 0, s.mel && s.mel.length ? s.mel : 0,
-      s.st && s.st.length ? s.st.map(v => [v.clef || "sol", v.mel || []]) : 0, s.clef || 0])];
+      s.st && s.st.length ? s.st.map(v => [v.clef || "sol", v.mel || []]) : 0, s.clef || 0]), song.cs === false ? 0 : 1];
   return b64e(JSON.stringify(arr));
 }
 function decodeSong(code) {
@@ -46,7 +46,7 @@ function decodeSong(code) {
       }
       return o;
     });
-    const song = Object.assign(newSong(), { name: name.slice(0, 80) || "Morceau reçu", mode, bpm: Math.min(220, Math.max(40, Math.round(bpm))), sig, pstyle: ps, gstyle: gs, loop: !!loop, sections });
+    const song = Object.assign(newSong(), a[10] === 0 ? { cs: false } : {}, { name: name.slice(0, 80) || "Morceau reçu", mode, bpm: Math.min(220, Math.max(40, Math.round(bpm))), sig, pstyle: ps, gstyle: gs, loop: !!loop, sections });
     return { song, tonic: [TON[ti].l, TON[ti].a] };
   } catch (x) { return null; }
 }

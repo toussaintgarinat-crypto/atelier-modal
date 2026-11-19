@@ -135,4 +135,20 @@ textarea:disabled,.btn:disabled{opacity:.5}
 .melfloat .hd:active{cursor:grabbing}
 .melfloat .grip{color:var(--mu);font-size:18px;padding:0 4px}
 body.mel-ed-open{padding-bottom:340px}
+
+#mel-print{display:none}
+.psub{margin:2px 0 14px;font-size:13px}
+.psec{break-inside:avoid;margin-bottom:14px}
+.psec h2{font-size:15px;margin:0 0 4px}.psec h2 span{font-weight:400;font-size:12px}
+.pgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid #555}
+.pcell{border:1px solid #555;padding:6px 8px;min-height:34px}.pcell small{display:block;font-size:9px;color:#555}.pcell b{font-size:15px}
+.pfoot{margin-top:18px;font-size:10px;color:#777;text-align:right}
+@page{margin:12mm}
+@media print{
+  html:has(body.printing),body.printing{background:#fff!important;padding:0!important;min-height:0!important}
+  body.printing>*:not(#mel-print){display:none!important}
+  body.printing #mel-print{display:block;color:#000;background:#fff;font-family:system-ui,sans-serif}
+  body.printing #mel-print h1{font-size:22px;margin:0}
+}
 .themecard svg,.melfloat svg{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.psys{break-inside:avoid;margin-bottom:10px}
