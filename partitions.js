@@ -111,10 +111,53 @@ async function openItem(id) {
 }
 function drawView() {
   const d = $("scview"); if (!d || !SC.view) return;
-  d.innerHTML = `<div class="scbar"><b style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(SC.view.name)}</b>
-    <button class="btn sm sec" data-act="sc-zoom" data-v="-1">−</button><span>${Math.round(SC.view.z * 100)} %</span><button class="btn sm sec" data-act="sc-zoom" data-v="1">+</button>
+  const v = SC.view, pl = window.__pl, names = pl ? pl.names() : [];
+  d.innerHTML = `<div class="scbar"><b style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(v.name)}</b>
+    <button class="btn sm sec" data-act="sc-zoom" data-v="-1">−</button><span>${Math.round(v.z * 100)} %</span><button class="btn sm sec" data-act="sc-zoom" data-v="1">+</button>
+    <button class="btn sm ${v.cut ? "" : "sec"}" data-act="sc-cut" title="Découper une partie de la partition">✂ Découper</button>
     <button class="btn sm" data-act="sc-close">Fermer</button></div>
-   <div class="scbody"><img src="${SC.view.url}" alt="${E(SC.view.name)}" style="width:${SC.view.z * 100}%;max-width:none"></div>`;
+   ${v.cut ? `<div class="scbar" style="flex-wrap:wrap"><span class="muted" style="flex:1;min-width:160px">${v.cut.r ? "Zone choisie : tu peux la refaire." : "Trace un rectangle sur la partition avec le doigt ou la souris."}</span>
+     ${names.length ? `<select data-act="sc-plsel">${names.map((n, i) => `<option value="${i}" ${i === (v.cut.pl >= 0 ? v.cut.pl : pl.cur()) ? "selected" : ""}>${E(n)}</option>`).join("")}</select>` : ""}
+     <button class="btn sm" data-act="sc-cutpl" ${v.cut.r && names.length ? "" : "disabled"}>→ Playlist</button>
+     <button class="btn sm sec" data-act="sc-cutok" ${v.cut.r ? "" : "disabled"}>Garder dans Partitions</button>
+     ${v.msg ? `<div class="muted" style="width:100%">${E(v.msg)}</div>` : ""}</div>` : ""}
+   <div class="scbody"><div id="scwrap" style="position:relative;margin:0 auto;width:${v.z * 100}%"><img src="${v.url}" alt="${E(v.name)}" style="width:100%;max-width:none;display:block;user-select:none;-webkit-user-drag:none">
+    ${v.cut ? `<div id="scov" style="position:absolute;inset:0;touch-action:none;cursor:crosshair;background:rgba(0,0,0,.18)"><div id="screct" style="position:absolute;border:2px solid #f5b13d;background:rgba(245,177,61,.18);display:none"></div></div>` : ""}</div></div>`;
+  if (v.cut) wireCrop();
+}
+function drawRect() {
+  const r = SC.view && SC.view.cut && SC.view.cut.r, el = $("screct"); if (!el) return;
+  if (!r) { el.style.display = "none"; return; }
+  const x = Math.min(r.x0, r.x1), y = Math.min(r.y0, r.y1), w = Math.abs(r.x1 - r.x0), h = Math.abs(r.y1 - r.y0);
+  el.style.cssText += `;display:block;left:${x * 100}%;top:${y * 100}%;width:${w * 100}%;height:${h * 100}%`;
+}
+function wireCrop() {
+  const ov = $("scov"); if (!ov) return;
+  const pt = ev => { const b = ov.getBoundingClientRect(); return { x: Math.min(1, Math.max(0, (ev.clientX - b.left) / b.width)), y: Math.min(1, Math.max(0, (ev.clientY - b.top) / b.height)) }; };
+  let drag = false;
+  ov.addEventListener("pointerdown", ev => { ev.preventDefault(); try { ov.setPointerCapture(ev.pointerId); } catch (x) { } const p = pt(ev); drag = true; SC.view.cut.r = { x0: p.x, y0: p.y, x1: p.x, y1: p.y }; drawRect(); });
+  ov.addEventListener("pointermove", ev => { if (!drag) return; const p = pt(ev), r = SC.view.cut.r; r.x1 = p.x; r.y1 = p.y; drawRect(); });
+  const end = () => {
+    if (!drag) return; drag = false; const r = SC.view.cut.r;
+    if (r && (Math.abs(r.x1 - r.x0) < .03 || Math.abs(r.y1 - r.y0) < .02)) SC.view.cut.r = null;      // trop petit : on ignore
+    const z = $("scview"), keep = z && z.querySelector(".scbody") ? z.querySelector(".scbody").scrollTop : 0;
+    SC.view.msg = ""; drawView(); const b = $("scview") && $("scview").querySelector(".scbody"); if (b) b.scrollTop = keep;
+  };
+  ov.addEventListener("pointerup", end); ov.addEventListener("pointercancel", end);
+  drawRect();
+}
+async function cropSelection() {                 // la zone choisie devient une nouvelle partition (photo), gardée dans Partitions
+  const v = SC.view, r = v && v.cut && v.cut.r; if (!r) throw new Error("Trace d’abord un rectangle.");
+  const src = await getBlob(v.id), im = await loadImg(src);
+  const x = Math.round(Math.min(r.x0, r.x1) * im.naturalWidth), y = Math.round(Math.min(r.y0, r.y1) * im.naturalHeight);
+  const w = Math.max(8, Math.round(Math.abs(r.x1 - r.x0) * im.naturalWidth)), h = Math.max(8, Math.round(Math.abs(r.y1 - r.y0) * im.naturalHeight));
+  const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+  cv.getContext("2d").drawImage(im, x, y, w, h, 0, 0, w, h);
+  const p = await prepImage(new File([await toBlob(cv, .92)], "x.jpg", { type: "image/jpeg" }));
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const meta = { id, name: (v.name + " (extrait)").slice(0, 80), type: "image/jpeg", size: p.blob.size, added: Date.now(), thumb: p.thumb };
+  await putItem(meta, p.blob); await reload();
+  return meta;
 }
 function closeView() { if (SC.view) { URL.revokeObjectURL(SC.view.url); SC.view = null; } const d = $("scview"); if (d) d.remove(); }
 
@@ -129,6 +172,7 @@ function renderScores() {
       <div class="muted" style="margin-top:4px">${m.type === "application/pdf" ? "PDF" : "Photo"} · ${sizeTxt(m.size)} · ${new Date(m.added).toLocaleDateString("fr-FR")}</div></div></div>
      <div class="tr" style="margin-top:8px;flex-wrap:wrap;gap:6px"><button class="btn sm" data-act="sc-open" data-id="${m.id}">Ouvrir</button>
       <button class="btn sm sec" data-act="sc-share" data-id="${m.id}">📤 Partager</button>
+      <button class="btn sm sec" data-act="sc-pl" data-id="${m.id}" title="Ajouter cette partition à la playlist en cours">＋ Playlist</button>
       ${m.type === "application/pdf" ? "" : `<button class="btn sm sec" data-act="sc-song" data-id="${m.id}" title="Lire les accords de cette photo pour en faire un morceau">♪ En faire un morceau</button>`}
       <button class="btn sm sec" data-act="sc-dl" data-id="${m.id}">Télécharger</button><button class="btn sm sec" data-act="sc-del" data-id="${m.id}">Supprimer</button></div></div>`).join("");
   p.innerHTML = `<div class="card"><h2>Partitions (photos &amp; PDF)</h2>
@@ -166,6 +210,17 @@ document.addEventListener("click", ev => {
     if (!confirm(`Supprimer « ${m.name} » de cet appareil ? Cette action est définitive.`)) return;
     delItem(id).then(() => { SC.msg = "Partition supprimée."; return reload(); });
   }
+  else if (a === "sc-pl") { const pl = window.__pl; if (pl) { const n = pl.add("@score:" + id); const m = SC.items.find(x => x.id === id); SC.msg = `« ${m ? m.name : "Partition"} » ajoutée à la playlist « ${n} ».`; renderScores(); } }
+  else if (a === "sc-cut") { if (SC.view) { SC.view.cut = SC.view.cut ? null : { r: null, pl: -1 }; SC.view.msg = ""; drawView(); } }
+  else if (a === "sc-cutok" || a === "sc-cutpl") {
+    if (!SC.view || !SC.view.cut) return;
+    const toPl = a === "sc-cutpl", idx = SC.view.cut.pl;
+    cropSelection().then(meta => {
+      let msg = `✓ Extrait « ${meta.name} » gardé dans Partitions.`;
+      if (toPl && window.__pl) msg = `✓ Extrait « ${meta.name} » gardé et ajouté à la playlist « ${window.__pl.add("@score:" + meta.id, idx >= 0 ? idx : undefined)} ».`;
+      if (SC.view) { SC.view.cut.r = null; SC.view.msg = msg; drawView(); }
+    }).catch(x => { if (SC.view) { SC.view.msg = x.message || "Découpe impossible."; drawView(); } });
+  }
   else if (a === "sc-zoom") { if (SC.view) { SC.view.z = Math.max(.5, Math.min(5, SC.view.z + .5 * +t.dataset.v)); drawView(); } }
   else if (a === "sc-close") closeView();
   else if (a === "sc-song") {                               // une photo → l'analyse d'accords (nécessite la clé OpenRouter, sinon saisie à la main)
@@ -180,6 +235,7 @@ document.addEventListener("click", ev => {
 });
 document.addEventListener("change", ev => {
   const t = ev.target; if (!t.dataset) return;
+  if (t.dataset.act === "sc-plsel") { if (SC.view && SC.view.cut) SC.view.cut.pl = +t.value; return; }
   if (t.dataset.act === "sc-file") { const fs = Array.from(t.files || []); t.value = ""; if (fs.length) addFiles(fs); }
   else if (t.dataset.act === "sc-name") {
     const m = SC.items.find(x => x.id === t.dataset.id); if (!m) return;
@@ -188,7 +244,7 @@ document.addEventListener("change", ev => {
 });
 document.addEventListener("keydown", ev => { if (ev.key === "Escape" && SC.view) closeView(); });
 
-window.__scores = { listMeta, getBlob, putItem, prepImage, reload };
+window.__scores = { listMeta, getBlob, putItem, prepImage, reload, peek: id => SC.items.find(x => x.id === id), loaded: () => SC.loaded, ensure: () => SC.loaded ? Promise.resolve() : listMeta().then(a => { SC.items = a; SC.loaded = true; }).catch(() => { SC.loaded = true; }) };
 renderTop();                                   // l'onglet apparaît dès le chargement
 if (S.tab === "scores") render();
 })();

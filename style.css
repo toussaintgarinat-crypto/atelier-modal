@@ -159,3 +159,4 @@ body.mel-ed-open{padding-bottom:340px}
 .scbar{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--bd);color:var(--tx)}
 .scbody{flex:1;overflow:auto;touch-action:pan-x pan-y pinch-zoom;-webkit-overflow-scrolling:touch;padding:6px}
 .scbody img{display:block;margin:0 auto;height:auto}
+.plth{height:34px;width:auto;max-width:50px;object-fit:cover;border-radius:4px;vertical-align:middle;margin-right:6px;cursor:pointer}

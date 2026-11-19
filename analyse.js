@@ -451,7 +451,14 @@ const curL = () => PL.lists[PL.cur];
 const PLAY = { active: false, i: -1, internal: false };
 const PLmsg = { t: "" };
 
+const isScoreItem = n => typeof n === "string" && n.startsWith("@score:");       // élément de playlist = une partition (photo / PDF / extrait) de l'onglet Partitions
+function scoreLabel(n) {
+  const sc = window.__scores, m = sc && sc.peek ? sc.peek(n.slice(7)) : null;
+  if (!m) return `<span class="t">${sc && sc.loaded && sc.loaded() ? "Partition introuvable <small>(supprimée ?)</small>" : "Partition…"}</span>`;
+  return `<span class="t">${m.thumb ? `<img class="plth" src="${m.thumb}" alt="" data-act="sc-open" data-id="${E(m.id)}"> ` : ""}${E(m.name)} <small>${m.type === "application/pdf" ? "PDF" : "partition"} · à lire à l’écran</small></span>`;
+}
 function songLabel(name) {
+  if (isScoreItem(name)) return scoreLabel(name);
   const e = songsMap()[name];
   if (!e || !validSong(e.song)) return `<span class="t">${E(name)} <small>(introuvable : supprimé ?)</small></span>`;
   const t = e.tonic && TON.find(x => x.l === e.tonic[0] && x.a === e.tonic[1]);
@@ -460,6 +467,7 @@ function songLabel(name) {
 }
 function renderPlaylist() {
   const L = curL(), sm = songsMap(), names = Object.keys(sm);
+  const sc = window.__scores; if (sc && sc.ensure && sc.loaded && !sc.loaded() && L.items.some(isScoreItem)) sc.ensure().then(() => { if (S.tab === "playlist") renderPlaylist(); });
   $("panel").innerHTML = `
   <div class="card"><h2>Playlists</h2>
    <div class="tr"><select data-act="pl-sel" style="flex:1">${PL.lists.map((l, i) => `<option value="${i}" ${i === PL.cur ? "selected" : ""}>${E(l.name)} (${l.items.length})</option>`).join("")}</select></div>
@@ -470,13 +478,21 @@ function renderPlaylist() {
    <div class="tr" style="margin-top:8px"><span class="muted">Jouer dans une autre tonalité</span><select data-act="pl-shift">${[-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6].map(n => `<option value="${n}" ${n === (L.shift || 0) ? "selected" : ""}>${n === 0 ? "Tonalités d’origine" : (n > 0 ? "+" : "−") + Math.abs(n) + " demi-ton" + (Math.abs(n) > 1 ? "s" : "")}</option>`).join("")}</select></div>
    <div class="muted" id="plnow" style="margin:6px 0">${E(PLmsg.t)}</div>
    ${L.items.length ? L.items.map((n, i) => `<div class="plrow ${PLAY.active && PLAY.i === i ? "now" : ""}"><span class="no">${i + 1}</span>${songLabel(n)}
-     <button data-act="pl-one" data-i="${i}" title="Lire">▶</button><button data-act="pl-up" data-i="${i}" title="Monter">▲</button><button data-act="pl-dn" data-i="${i}" title="Descendre">▼</button><button data-act="pl-rm" data-i="${i}" title="Retirer">✕</button></div>`).join("")
+     ${isScoreItem(n) ? `<button data-act="sc-open" data-id="${E(n.slice(7))}" title="Afficher la partition">👁</button>` : `<button data-act="pl-one" data-i="${i}" title="Lire">▶</button>`}<button data-act="pl-up" data-i="${i}" title="Monter">▲</button><button data-act="pl-dn" data-i="${i}" title="Descendre">▼</button><button data-act="pl-rm" data-i="${i}" title="Retirer">✕</button></div>`).join("")
      : `<div class="muted">Playlist vide. Ajoute des morceaux ci-dessous.</div>`}</div>
   <div class="card"><h2>Ajouter un morceau</h2>
    ${names.length ? `<div class="tr"><select id="pl-add" style="flex:1">${names.map(n => `<option value="${E(n)}">${E(n)}</option>`).join("")}</select><button class="btn sm" data-act="pl-addsel">Ajouter</button></div>` : `<div class="muted">Aucun morceau enregistré pour l’instant : crée-en dans l’onglet Morceaux ou Analyse, puis enregistre-les.</div>`}
    <div class="tr" style="margin-top:8px"><button class="btn sm sec" data-act="pl-addcur">+ Ajouter le morceau en cours (« ${E(S.song.name)} »)</button></div>
    <div class="muted" style="margin-top:6px">Les morceaux sont gardés dans ce navigateur, sur cet appareil.</div></div>`;
 }
+window.__pl = {                                     // utilisé par Morceaux (extraits) et Partitions (photos découpées)
+  names: () => PL.lists.map(l => l.name), cur: () => PL.cur,
+  add(item, idx) {
+    const L = PL.lists[idx >= 0 && idx < PL.lists.length ? idx : PL.cur]; L.items.push(item); savePL();
+    if (S.tab === "playlist") renderPlaylist();
+    return L.name;
+  }
+};
 function updNow() {
   const el = $("plnow"); if (!el) return;
   const L = curL();

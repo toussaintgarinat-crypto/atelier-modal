@@ -57,7 +57,18 @@ async function readZip(file) {                       // renvoie {nom: Uint8Array
 /* ---------- contenu de la sauvegarde ---------- */
 const extOf = m => m.type === "application/pdf" ? "pdf" : "jpg";
 const safe = s => String(s || "Partition").replace(/[\\/:*?"<>|\x00-\x1f]+/g, " ").trim().slice(0, 60) || "Partition";
-async function collect() {
+const hash = t => { let h = 5381; for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) >>> 0; return h.toString(36); };
+/* partitions écrites (thème + portées + accords) : un PDF lisible par morceau enregistré */
+async function songPdfs(say) {
+  const songs = lsGet(K_SONGS) || {}, names = Object.keys(songs).filter(k => songs[k] && validSong(songs[k].song)).slice(0, 300), out = [];
+  if (!window.__melPdf) return out;
+  for (let i = 0; i < names.length; i++) {
+    if (say) say(`Mise en page des partitions… ${i + 1}/${names.length}`);
+    try { out.push({ name: names[i], h: hash(JSON.stringify(songs[names[i]])), blob: await window.__melPdf(songs[names[i]]) }); } catch (x) { }
+  }
+  return out;
+}
+async function collect(say) {
   const S0 = SCR(); if (!S0) throw new Error("Stockage des partitions indisponible.");
   const meta = await S0.listMeta(), files = [], index = [];
   for (const m of meta) {
@@ -66,12 +77,14 @@ async function collect() {
     files.push({ name: file, blob: b }); index.push(Object.assign({}, m, { file }));
   }
   const data = { v: 1, saved: new Date().toISOString(), songs: lsGet(K_SONGS) || {}, playlists: lsGet(K_PL) || null };
+  const pdfs = await songPdfs(say); const used = {};
+  pdfs.forEach(p => { let n = safe(p.name); used[n] = (used[n] || 0) + 1; if (used[n] > 1) n += " (" + used[n] + ")"; files.push({ name: `partitions-ecrites/${n}.pdf`, blob: p.blob }); });
   files.unshift({ name: "partitions/index.json", blob: new Blob([JSON.stringify(index)], { type: "application/json" }) });
   files.unshift({ name: "morceaux.json", blob: new Blob([JSON.stringify(data, null, 1)], { type: "application/json" }) });
-  return { files, nSongs: Object.keys(data.songs).length, nScores: index.length };
+  return { files, nSongs: Object.keys(data.songs).length, nScores: index.length, nPdf: pdfs.length };
 }
 const stamp = () => new Date().toISOString().slice(0, 10);
-const summary = c => `${c.nSongs} morceau${c.nSongs > 1 ? "x" : ""} et ${c.nScores} partition${c.nScores > 1 ? "s" : ""}`;
+const summary = c => `${c.nSongs} morceau${c.nSongs > 1 ? "x" : ""}, ${c.nScores} partition${c.nScores > 1 ? "s" : ""}${c.nPdf ? ` et ${c.nPdf} PDF de partitions écrites` : ""}`;
 
 /* ---------- export : fichier ZIP / dossier ---------- */
 function downloadBlob(blob, name) {
@@ -91,14 +104,14 @@ async function saveSmart(blob, name) {
   }
   downloadBlob(blob, name); return "download";
 }
-async function exportZip() {
-  const c = await collect(), name = `atelier-modal-sauvegarde-${stamp()}.zip`, how = await saveSmart(await makeZip(c.files), name);
+async function exportZip(say) {
+  const c = await collect(say), name = `atelier-modal-sauvegarde-${stamp()}.zip`, how = await saveSmart(await makeZip(c.files), name);
   if (how === "cancel") return "Export annulé.";
   return `Sauvegarde créée (${summary(c)}). ` + (how === "pick" ? "Fichier enregistré à l’endroit choisi." : how === "share" ? "Choisis où l’envoyer ou l’enregistrer." : "Le fichier a été téléchargé : copie-le ensuite sur ta clé USB.");
 }
-async function exportDir() {
+async function exportDir(say) {
   let dir; try { dir = await window.showDirectoryPicker({ mode: "readwrite" }); } catch (x) { return "Export annulé."; }
-  const c = await collect(), top = await dir.getDirectoryHandle(`Atelier modal ${stamp()}`, { create: true });
+  const c = await collect(say), top = await dir.getDirectoryHandle(`Atelier modal ${stamp()}`, { create: true });
   for (const f of c.files) {
     const segs = f.name.split("/"); let d = top;
     for (const s of segs.slice(0, -1)) d = await d.getDirectoryHandle(s, { create: true });
@@ -221,7 +234,20 @@ async function driveBackup(say) {
   const old = remote.find(f => f.appProperties && f.appProperties.amKind === "songs");
   const mp = multipart(old ? {} : { name: "morceaux.json", parents: [fid], appProperties: { amKind: "songs" } }, songsBlob, "application/json");
   await api(old ? `files/${old.id}?uploadType=multipart&fields=id` : "files?uploadType=multipart&fields=id", { method: old ? "PATCH" : "POST", headers: mp.headers, body: mp.body }, true);
-  return `Sauvegarde Google Drive terminée : ${up} nouvelle${up > 1 ? "s" : ""} partition${up > 1 ? "s" : ""} envoyée${up > 1 ? "s" : ""}, ${Object.keys(lsGet(K_SONGS) || {}).length} morceau${Object.keys(lsGet(K_SONGS) || {}).length > 1 ? "x" : ""} à jour. Dossier « ${FOLDER} » dans ton Drive.`;
+  /* partitions écrites en PDF : un fichier par morceau, renvoyé seulement s'il a changé */
+  const songs = lsGet(K_SONGS) || {}, nm = Object.keys(songs).filter(k => songs[k] && validSong(songs[k].song)).slice(0, 300); let pdfUp = 0, pdfFail = 0;
+  for (let i = 0; i < nm.length; i++) {
+    const h = hash(JSON.stringify(songs[nm[i]])), key = hash(nm[i]), prev = remote.find(f => f.appProperties && f.appProperties.amPdf === key);
+    if (prev && prev.appProperties.amPdfH === h) continue;
+    say(`Envoi des partitions écrites (PDF)… ${i + 1}/${nm.length}`);
+    try {
+      const pdf = await window.__melPdf(songs[nm[i]]);
+      const m2 = multipart(prev ? { appProperties: { amPdf: key, amPdfH: h } } : { name: `${safe(nm[i])} (partition).pdf`, parents: [fid], appProperties: { amPdf: key, amPdfH: h } }, pdf, "application/pdf");
+      await api(prev ? `files/${prev.id}?uploadType=multipart&fields=id` : "files?uploadType=multipart&fields=id", { method: prev ? "PATCH" : "POST", headers: m2.headers, body: m2.body }, true); pdfUp++;
+    } catch (x) { pdfFail++; }
+  }
+  const nS = Object.keys(songs).length;
+  return `Sauvegarde Google Drive terminée : ${up} nouvelle${up > 1 ? "s" : ""} partition${up > 1 ? "s" : ""} (photos/PDF) envoyée${up > 1 ? "s" : ""}, ${nS} morceau${nS > 1 ? "x" : ""} à jour, ${pdfUp} partition${pdfUp > 1 ? "s" : ""} écrite${pdfUp > 1 ? "s" : ""} (PDF) envoyée${pdfUp > 1 ? "s" : ""}${pdfFail ? ` (${pdfFail} en échec)` : ""}. Dossier « ${FOLDER} » dans ton Drive.`;
 }
 async function driveRestore(say) {
   say("Connexion à Google…"); const fid = await folderId(); say("Lecture du dossier Drive…");
@@ -243,7 +269,7 @@ function fill() {
   const slot = $("bk-slot"); if (!slot) return;
   const dirOk = !!window.showDirectoryPicker, cid = clientId(), origin = /^https?:/.test(location.protocol) ? location.origin : "https://atelier-modal.vercel.app";
   slot.innerHTML = `<div class="card" id="bkcard"><h2>Sauvegarde</h2>
-    <div class="muted">Tes <b>morceaux enregistrés</b>, tes <b>playlists</b> et tes <b>partitions</b> (photos et PDF) : exporte-les pour ne rien perdre en changeant d’appareil ou si le navigateur est vidé.</div>
+    <div class="muted">Tes <b>morceaux enregistrés</b> (avec leurs <b>partitions écrites en PDF</b>), tes <b>playlists</b> et tes <b>partitions</b> (photos et PDF) : exporte-les pour ne rien perdre en changeant d’appareil ou si le navigateur est vidé.</div>
     <div class="tr" style="margin-top:10px;flex-wrap:wrap;gap:6px"><button class="btn" data-act="bk-zip" ${BK.busy ? "disabled" : ""}>💾 Exporter tout (clé USB, mail…)</button>
      ${dirOk ? `<button class="btn sm sec" data-act="bk-dir" ${BK.busy ? "disabled" : ""}>📁 Vers un dossier / une clé USB</button>` : ""}
      <button class="btn sm sec" data-act="bk-imp" ${BK.busy ? "disabled" : ""}>📂 Importer une sauvegarde</button>
@@ -259,16 +285,29 @@ function fill() {
       <div class="tr"><input class="nm" id="bk-cid" placeholder="123456789-abc….apps.googleusercontent.com" value="${E(cid)}" autocomplete="off"><button class="btn sm" data-act="bk-cidsave">Enregistrer</button></div></details>
     </details></div>`;
 }
-window.__bkFill = fill;
-const say = (k, busy) => t => { BK[k] = t; BK.busy = busy !== false; fill(); };
+function fillSong() {                                   // petite carte Drive dans l'onglet Morceaux
+  const c = $("bk-song"); if (!c) return;
+  c.innerHTML = `<h2>☁ Google Drive</h2><div class="muted">Sauvegarde tes morceaux, tes playlists et tes partitions (en PDF lisible) dans le dossier « ${FOLDER} » de ton Drive.</div>
+    <div class="tr" style="margin-top:8px;flex-wrap:wrap;gap:6px"><button class="btn sm" data-act="bk-gsave" ${BK.busy ? "disabled" : ""}>☁ Sauvegarder sur Drive</button><button class="btn sm sec" data-act="bk-grest" ${BK.busy ? "disabled" : ""}>⬇ Restaurer depuis Drive</button></div>
+    <div class="muted" style="margin-top:6px">${E(BK.gmsg)}</div>`;
+}
+window.__bkFill = () => { fill(); fillSong(); };
+const _rs = renderSong;
+renderSong = function () {
+  _rs();
+  const p = $("panel"); if (!p || S.tab !== "song" || !p.querySelector('input[data-act="secname"]')) return;
+  if (!$("bk-song")) { const c = document.createElement("div"); c.className = "card"; c.id = "bk-song"; p.appendChild(c); }
+  fillSong();
+};
+const say = (k, busy) => t => { BK[k] = t; BK.busy = busy !== false; fill(); fillSong(); };
 async function run(kind, fn) {
   if (BK.busy) return;
   const key = kind === "g" ? "gmsg" : "msg", other = kind === "g" ? "msg" : "gmsg"; BK[other] = "";
   const s = say(key, true);
   try { const m = await fn(s); BK.busy = false; BK[key] = m; }
   catch (x) { BK.busy = false; BK[key] = x && x.message ? x.message : "Erreur inattendue."; }
-  fill();
-  const sc = SCR(); if (sc) { await sc.reload(); fill(); }
+  fill(); fillSong();
+  const sc = SCR(); if (sc) { await sc.reload(); fill(); fillSong(); }
 }
 function reloadSoon(r) { if (r && (r.songs.add || r.pls)) setTimeout(() => location.reload(), 2200); }      // morceaux et playlists sont lus au démarrage
 
@@ -290,5 +329,5 @@ document.addEventListener("change", ev => {
 document.addEventListener("toggle", ev => { if (ev.target && ev.target.id === "bk-g") BK.gopen = ev.target.open; }, true);
 
 window.__backup = { makeZip, readZip, collect, importZip, crc32 };
-if (S.tab === "scores") render();
+if (S.tab === "scores" || S.tab === "song") render();
 })();
