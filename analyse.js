@@ -408,6 +408,7 @@ function renderAnalyse() {
    <div class="tr" style="margin-top:8px"><input type="file" accept="image/*" id="an-file" data-act="an-file" style="display:none">
     <button class="btn sm" data-act="an-pick">📷 Photo</button><button class="btn sm sec" data-act="an-read" ${AN.img && !AN.busy ? "" : "disabled"}>Lire la photo</button></div>
    ${AN.img ? `<img src="${AN.img}" alt="Photo de la grille" style="max-width:100%;max-height:170px;border-radius:10px;margin-top:8px">` : ""}
+   ${AN.img && window.__an ? `<div class="tr" style="margin-top:6px"><button class="btn sm sec" data-act="sc-keep">Garder aussi la photo dans Partitions</button></div>` : ""}
    <div class="muted" id="an-status" style="margin:6px 0">${E(AN.status)}</div>
    <textarea id="an-text" data-act="an-text" rows="7" placeholder="[Couplet]&#10;| Am7 | D7 | Gmaj7 | Cmaj7 |&#10;| F#m7b5 | B7 | Em | % |">${E(AN.text)}</textarea>
    <div class="tr" style="margin-top:8px"><button class="btn" data-act="an-go">Analyser</button><button class="btn sm sec" data-act="an-clear">Vider</button></div>
@@ -621,4 +622,14 @@ document.addEventListener("toggle", ev => { if (ev.target && ev.target.id === "a
 
 render();
 window.__analyse = { parseChord, parseGrid, analyse, toSong };
+/* appelé par l'onglet Partitions : envoyer une photo vers l'analyse / récupérer la photo en cours */
+window.__an = {
+  setPhoto(dataUrl) {
+    AN.img = dataUrl; AN.res = null; AN.flow = false;
+    AN.status = OR.key && OR.model ? "Photo prête. Appuie sur « Lire la photo »." : "Photo prête. Sans clé OpenRouter elle ne peut pas être lue toute seule : tape les accords en la regardant, ou ajoute ta clé dans les réglages ci-dessous.";
+    if (!(OR.key && OR.model)) AN.setOpen = true;
+    S.tab = "analyse"; render();
+  },
+  getPhoto() { return AN.img; }
+};
 })();

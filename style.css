@@ -152,3 +152,10 @@ body.mel-ed-open{padding-bottom:340px}
 }
 .themecard svg,.melfloat svg{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .psys{break-inside:avoid;margin-bottom:10px}
+
+.scth{width:84px;height:84px;object-fit:cover;border-radius:10px;border:1px solid var(--bd);background:var(--sf2);cursor:pointer;flex:0 0 auto}
+.scth.pdf{display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--dim);font-size:18px}
+.scview{position:fixed;inset:0;z-index:80;background:rgba(5,8,12,.96);display:flex;flex-direction:column}
+.scbar{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--bd);color:var(--tx)}
+.scbody{flex:1;overflow:auto;touch-action:pan-x pan-y pinch-zoom;-webkit-overflow-scrolling:touch;padding:6px}
+.scbody img{display:block;margin:0 auto;height:auto}
