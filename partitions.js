@@ -317,7 +317,8 @@ document.addEventListener("change", ev => {
 });
 document.addEventListener("keydown", ev => { if (ev.key === "Escape" && SC.view) closeView(); });
 
-window.__scores = { listMeta, getBlob, putItem, setMeta, dropBlob, prepImage, reload, items: () => SC.items, peek: id => SC.items.find(x => x.id === id), loaded: () => SC.loaded, ensure: () => SC.loaded ? Promise.resolve() : listMeta().then(a => { SC.items = a; SC.loaded = true; }).catch(() => { SC.loaded = true; }) };
+async function renameScore(id, name) { const m = SC.items.find(z => z.id === id); if (!m) return; m.name = String(name).trim().slice(0, 80) || "Partition"; await setMeta(m); }
+window.__scores = { rename: renameScore, listMeta, getBlob, putItem, setMeta, dropBlob, prepImage, reload, items: () => SC.items, peek: id => SC.items.find(x => x.id === id), loaded: () => SC.loaded, ensure: () => SC.loaded ? Promise.resolve() : listMeta().then(a => { SC.items = a; SC.loaded = true; }).catch(() => { SC.loaded = true; }) };
 renderTop();                                   // l'onglet apparaît dès le chargement
 if (S.tab === "scores") render();
 })();

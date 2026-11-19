@@ -478,7 +478,7 @@ function renderPlaylist() {
    <div class="tr" style="margin-top:8px"><span class="muted">Jouer dans une autre tonalité</span><select data-act="pl-shift">${[-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6].map(n => `<option value="${n}" ${n === (L.shift || 0) ? "selected" : ""}>${n === 0 ? "Tonalités d’origine" : (n > 0 ? "+" : "−") + Math.abs(n) + " demi-ton" + (Math.abs(n) > 1 ? "s" : "")}</option>`).join("")}</select></div>
    <div class="muted" id="plnow" style="margin:6px 0">${E(PLmsg.t)}</div>
    ${L.items.length ? L.items.map((n, i) => `<div class="plrow ${PLAY.active && PLAY.i === i ? "now" : ""}"><span class="no">${i + 1}</span>${songLabel(n)}
-     ${isScoreItem(n) ? `<button data-act="sc-open" data-id="${E(n.slice(7))}" title="Afficher la partition">👁</button>` : `<button data-act="pl-one" data-i="${i}" title="Lire">▶</button>`}<button data-act="pl-up" data-i="${i}" title="Monter">▲</button><button data-act="pl-dn" data-i="${i}" title="Descendre">▼</button><button data-act="pl-rm" data-i="${i}" title="Retirer">✕</button></div>`).join("")
+     ${isScoreItem(n) ? `<button data-act="sc-open" data-id="${E(n.slice(7))}" title="Afficher la partition">👁</button>` : `<button data-act="pl-one" data-i="${i}" title="Lire">▶</button>`}<button data-act="pl-rn" data-i="${i}" title="Renommer">✎</button><button data-act="pl-up" data-i="${i}" title="Monter">▲</button><button data-act="pl-dn" data-i="${i}" title="Descendre">▼</button><button data-act="pl-rm" data-i="${i}" title="Retirer">✕</button></div>`).join("")
      : `<div class="muted">Playlist vide. Ajoute des morceaux ci-dessous.</div>`}</div>
   <div class="card"><h2>Ajouter un morceau</h2>
    ${names.length ? `<div class="tr"><select id="pl-add" style="flex:1">${names.map(n => `<option value="${E(n)}">${E(n)}</option>`).join("")}</select><button class="btn sm" data-act="pl-addsel">Ajouter</button></div>` : `<div class="muted">Aucun morceau enregistré pour l’instant : crée-en dans l’onglet Morceaux ou Analyse, puis enregistre-les.</div>`}
@@ -601,6 +601,24 @@ document.addEventListener("click", ev => {
     case "pl-addcur": {
       const song = JSON.parse(JSON.stringify(S.song)); saveSongMap(song, S.tonic);
       curL().items.push(song.name); savePL(); renderPlaylist(); break;
+    }
+    case "pl-rn": {                                     // renomme l'élément lui-même (morceau enregistré ou partition) ; toutes les playlists suivent
+      const old = curL().items[i]; if (old == null) break;
+      if (isScoreItem(old)) {
+        const sc = window.__scores, m = sc && sc.peek ? sc.peek(old.slice(7)) : null; if (!m) { PLmsg.t = "Partition introuvable."; renderPlaylist(); break; }
+        const n = (prompt("Nouveau nom de la partition :", m.name) || "").trim().slice(0, 80);
+        if (n && n !== m.name) sc.rename(m.id, n).then(() => { if (S.tab === "playlist") renderPlaylist(); });
+        break;
+      }
+      const sm = songsMap(), e = sm[old]; if (!e) { PLmsg.t = "Morceau introuvable (supprimé ?)."; renderPlaylist(); break; }
+      const n = (prompt("Nouveau nom du morceau (il change aussi dans les autres playlists) :", old) || "").trim().slice(0, 80);
+      if (!n || n === old) break;
+      if (sm[n] || isScoreItem(n)) { PLmsg.t = `Un morceau s’appelle déjà « ${n} » : choisis un autre nom.`; renderPlaylist(); break; }
+      const ne = JSON.parse(JSON.stringify(e)); if (ne.song) ne.song.name = n;
+      const out = {}; Object.keys(sm).forEach(k => { out[k === old ? n : k] = k === old ? ne : sm[k]; });
+      if (!lsSet(K_SONGS, out)) { PLmsg.t = "Renommage impossible ici."; renderPlaylist(); break; }
+      PL.lists.forEach(l => { l.items = l.items.map(x => x === old ? n : x); }); savePL();
+      PLmsg.t = `« ${old} » renommé en « ${n} ».`; renderPlaylist(); break;
     }
     case "pl-rm": if (PLAY.active) stopPL(); curL().items.splice(i, 1); savePL(); renderPlaylist(); break;
     case "pl-up": if (i > 0) { const L = curL().items; [L[i - 1], L[i]] = [L[i], L[i - 1]]; if (PLAY.active) stopPL(); savePL(); renderPlaylist(); } break;
