@@ -13,7 +13,7 @@ const b64d = s => decodeURIComponent(escape(atob(s.replace(/-/g, "+").replace(/_
 function encodeSong(song, tonic) {
   const ti = TON.findIndex(t => t.l === tonic.l && t.a === tonic.a);
   const arr = [1, song.name, song.mode, song.bpm, song.sig, song.pstyle, song.gstyle, song.loop ? 1 : 0, ti < 0 ? 0 : ti,
-    song.sections.map(s => [s.name, s.rep || 1, s.bars.map(b => b ? b.s + ":" + b.q : ""), s.shift | 0, s.mel && s.mel.length ? s.mel : 0])];
+    song.sections.map(s => [s.name, s.rep || 1, s.bars.map(b => b ? b.s + ":" + b.q : ""), s.shift | 0, s.mel && s.mel.length ? s.mel : 0, s.vx && s.vx.length ? s.vx.map(v => [v.n, v.k, v.w, v.m || []]) : 0]), song.cs === false ? 0 : 1];
   return b64e(JSON.stringify(arr));
 }
 function decodeSong(code) {
@@ -35,13 +35,16 @@ function decodeSong(code) {
       });
       const sh = Math.max(-11, Math.min(11, s[3] | 0)), o = { name: s[0].slice(0, 60), rep: Math.min(4, Math.max(1, s[1] | 0)), bars };
       if (sh) o.shift = sh;
-      if (Array.isArray(s[4]) && s[4].length <= 400) {
-        const mel = s[4].filter(n => Array.isArray(n) && n.length === 6 && n.every(Number.isInteger) && n[0] >= 0 && n[0] < bars.length && n[1] >= 0 && n[1] < 12 && n[2] >= 1 && n[2] <= 32 && n[3] >= 0 && n[3] < 7 && n[4] >= 0 && n[4] < 12 && Math.abs(n[5]) <= 3);
-        if (mel.length) o.mel = mel;
+      const okNotes = (arr, nbars) => Array.isArray(arr) && arr.length <= 400 ? arr.filter(n => Array.isArray(n) && n.length === 6 && n.every(Number.isInteger) && n[0] >= 0 && n[0] < nbars && n[1] >= 0 && n[1] < 12 && n[2] >= 1 && n[2] <= 32 && n[3] >= 0 && n[3] < 7 && n[4] >= 0 && n[4] < 12 && Math.abs(n[5]) <= 3) : [];
+      const mel = okNotes(s[4], bars.length);
+      if (mel.length) o.mel = mel;
+      if (Array.isArray(s[5])) {
+        const vx = s[5].slice(0, 3).filter(v => Array.isArray(v) && typeof v[0] === "string").map(v => ({ n: v[0].slice(0, 24) || "Voix", k: v[1] === "f" ? "f" : "g", w: ["sawtooth", "triangle", "square", "sine"].includes(v[2]) ? v[2] : "triangle", m: okNotes(v[3], bars.length) }));
+        if (vx.length) o.vx = vx;
       }
       return o;
     });
-    const song = Object.assign(newSong(), { name: name.slice(0, 80) || "Morceau reçu", mode, bpm: Math.min(220, Math.max(40, Math.round(bpm))), sig, pstyle: ps, gstyle: gs, loop: !!loop, sections });
+    const song = Object.assign(newSong(), a[10] === 0 ? { cs: false } : {}, { name: name.slice(0, 80) || "Morceau reçu", mode, bpm: Math.min(220, Math.max(40, Math.round(bpm))), sig, pstyle: ps, gstyle: gs, loop: !!loop, sections });
     return { song, tonic: [TON[ti].l, TON[ti].a] };
   } catch (x) { return null; }
 }
