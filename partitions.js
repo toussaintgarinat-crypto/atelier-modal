@@ -34,6 +34,11 @@ function putItem(meta, blob) {
 }
 const delItem = id => tx(["meta", "blobs"], "readwrite", t => { t.objectStore("blobs").delete(id); return t.objectStore("meta").delete(id); });
 const setMeta = meta => tx("meta", "readwrite", t => t.objectStore("meta").put(meta));
+/* partition « à la demande » : on retire le fichier de l'appareil, la fiche et la vignette restent ; le fichier est sur Drive (m.drive) */
+async function dropBlob(id, driveId) {
+  const all = await listMeta(), m = all.find(x => x.id === id); if (!m) return;
+  await tx(["meta", "blobs"], "readwrite", t => { t.objectStore("blobs").delete(id); return t.objectStore("meta").put(Object.assign({}, m, { off: true, drive: driveId || m.drive })); });
+}
 
 /* ---------- fichiers : réduction des photos, miniature ---------- */
 function loadImg(blob) {
@@ -87,9 +92,29 @@ function download(blob, name) {
   const u = URL.createObjectURL(blob), a = document.createElement("a");
   a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000);
 }
+const note = t => { SC.msg = t; if (S.tab === "scores") renderScores(); };
+function wait(t) {                                          // petit bandeau pendant un téléchargement depuis Drive
+  let d = $("scwait");
+  if (!t) { if (d) d.remove(); return; }
+  if (!d) { d = document.createElement("div"); d.id = "scwait"; d.style.cssText = "position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:99999;background:#222;color:#fff;padding:8px 14px;border-radius:10px;font-size:14px"; document.body.appendChild(d); }
+  d.textContent = t;
+}
+/* le fichier d'une partition : sur l'appareil, sinon téléchargé depuis Drive à la demande (et NON gardé sur l'appareil) */
+async function blobOf(id) {
+  const b = await getBlob(id); if (b) return b;
+  const m = SC.items.find(x => x.id === id);
+  if (!m || !m.off) return null;
+  if (!window.__driveFetch) throw new Error("Cette partition est sur Drive seulement et la connexion Drive n’est pas disponible.");
+  wait("☁ Téléchargement depuis Drive…");
+  try {
+    const f = await window.__driveFetch(m);
+    if (m.type !== "application/pdf" && !m.thumb) { try { m.thumb = (await prepImage(new File([f], "x.jpg", { type: f.type || "image/jpeg" }))).thumb; await setMeta(m); } catch (x) { } }
+    return f;
+  } finally { wait(""); }
+}
 async function shareItem(id) {
   const m = SC.items.find(x => x.id === id); if (!m) return;
-  const b = await getBlob(id); if (!b) return;
+  let b; try { b = await blobOf(id); } catch (x) { return note(x.message); } if (!b) return;
   const f = new File([b], fileNameOf(m), { type: b.type || m.type });
   if (navigator.canShare && navigator.canShare({ files: [f] })) {
     try { await navigator.share({ files: [f], title: m.name }); return; } catch (x) { if (x && x.name === "AbortError") return; }
@@ -118,7 +143,7 @@ async function renderPdfPage(v, n) {
 function showView() { const d = document.createElement("div"); d.id = "scview"; d.className = "scview"; document.body.appendChild(d); drawView(); }
 async function openItem(id) {
   const m = SC.items.find(x => x.id === id); if (!m) return;
-  const b = await getBlob(id); if (!b) return;
+  let b; try { b = await blobOf(id); } catch (x) { return note(x.message); } if (!b) return;
   if (m.type === "application/pdf") {
     try {
       const lib = await pdfLib(), doc = await lib.getDocument({ data: await b.arrayBuffer() }).promise;
@@ -175,7 +200,7 @@ function wireCrop() {
 }
 async function cropSelection() {                 // la zone choisie devient une nouvelle partition (photo), gardée dans Partitions
   const v = SC.view, r = v && v.cut && v.cut.r; if (!r) throw new Error("Trace d’abord un rectangle.");
-  const src = v.blob || await getBlob(v.id), im = await loadImg(src);
+  const src = v.blob || await blobOf(v.id), im = await loadImg(src);
   const x = Math.round(Math.min(r.x0, r.x1) * im.naturalWidth), y = Math.round(Math.min(r.y0, r.y1) * im.naturalHeight);
   const w = Math.max(8, Math.round(Math.abs(r.x1 - r.x0) * im.naturalWidth)), h = Math.max(8, Math.round(Math.abs(r.y1 - r.y0) * im.naturalHeight));
   const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
@@ -194,10 +219,11 @@ function renderScores() {
   const keep = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.act === "sc-name" ? document.activeElement : null;
   if (keep) return;                                         // on ne redessine pas pendant qu'on renomme
   const items = SC.items.map(m => `<div class="card scitem"><div class="tr" style="align-items:flex-start;gap:10px">
-     ${m.thumb ? `<img class="scth" src="${m.thumb}" alt="" data-act="sc-open" data-id="${m.id}">` : `<div class="scth pdf" data-act="sc-open" data-id="${m.id}">PDF</div>`}
+     ${m.thumb ? `<img class="scth" src="${m.thumb}" alt="" data-act="sc-open" data-id="${m.id}">` : `<div class="scth pdf" data-act="sc-open" data-id="${m.id}">${m.type === "application/pdf" ? "PDF" : "☁"}</div>`}
      <div style="flex:1;min-width:0"><input class="nm" style="width:100%" value="${E(m.name)}" data-act="sc-name" data-id="${m.id}" maxlength="80" aria-label="Nom de la partition">
-      <div class="muted" style="margin-top:4px">${m.type === "application/pdf" ? "PDF" : "Photo"} · ${sizeTxt(m.size)} · ${new Date(m.added).toLocaleDateString("fr-FR")}</div></div></div>
+      <div class="muted" style="margin-top:4px">${m.type === "application/pdf" ? "PDF" : "Photo"} · ${sizeTxt(m.size)} · ${new Date(m.added).toLocaleDateString("fr-FR")}${m.off ? " · ☁ sur Drive seulement" : m.drive ? " · ☁ aussi sur Drive" : ""}</div></div></div>
      <div class="tr" style="margin-top:8px;flex-wrap:wrap;gap:6px"><button class="btn sm" data-act="sc-open" data-id="${m.id}">Ouvrir</button>
+      ${m.drive && !m.off ? `<button class="btn sm sec" data-act="sc-free" data-id="${m.id}" title="Retire le fichier de l’appareil ; il reste sur Drive (vignette gardée) et se télécharge à l’ouverture">☁ Libérer la place</button>` : ""}
       <button class="btn sm sec" data-act="sc-share" data-id="${m.id}">📤 Partager</button>
       <button class="btn sm sec" data-act="sc-pl" data-id="${m.id}" title="Ajouter cette partition à la playlist en cours">＋ Playlist</button>
       ${m.type === "application/pdf" ? "" : `<button class="btn sm sec" data-act="sc-song" data-id="${m.id}" title="Lire les accords de cette photo pour en faire un morceau">♪ En faire un morceau</button>`}
@@ -208,7 +234,7 @@ function renderScores() {
      <button class="btn" data-act="sc-add" ${SC.busy ? "disabled" : ""}>+ Ajouter photo ou PDF</button></div>
     <div class="muted" id="sc-msg" style="margin-top:6px">${E(SC.msg)}</div></div>
    ${SC.loaded ? (items || `<div class="card"><div class="muted">Aucune partition pour l’instant. Ajoute une photo (appareil photo ou galerie) ou un PDF.</div></div>`) : `<div class="card"><div class="muted">Chargement…</div></div>`}
-   <div class="card"><div class="muted">Les fichiers restent <b>sur cet appareil</b> (rien n’est envoyé en ligne). Pour les garder en sécurité ou les passer à quelqu’un, utilise <b>Partager</b> (messagerie, mail, AirDrop…) ou <b>Télécharger</b>.</div></div>
+   <div class="card"><div class="muted">Les fichiers restent <b>sur cet appareil</b> (rien n’est envoyé en ligne, sauf si tu choisis la sauvegarde Google Drive ci-dessous : tu peux alors y garder les partitions et ne les télécharger qu’à l’ouverture). Pour les garder en sécurité ou les passer à quelqu’un, utilise <b>Partager</b> (messagerie, mail, AirDrop…) ou <b>Télécharger</b>.</div></div>
    <div id="bk-slot"></div>`;
   if (window.__bkFill) window.__bkFill();
 }
@@ -231,11 +257,18 @@ document.addEventListener("click", ev => {
   if (a === "sc-add") { const f = $("sc-file"); if (f) f.click(); }
   else if (a === "sc-open") openItem(id);
   else if (a === "sc-share") shareItem(id);
-  else if (a === "sc-dl") { const m = SC.items.find(x => x.id === id); getBlob(id).then(b => { if (b && m) download(b, fileNameOf(m)); }); }
+  else if (a === "sc-dl") { const m = SC.items.find(x => x.id === id); blobOf(id).then(b => { if (b && m) download(b, fileNameOf(m)); }).catch(x => note(x.message)); }
   else if (a === "sc-del") {
     const m = SC.items.find(x => x.id === id); if (!m) return;
     if (!confirm(`Supprimer « ${m.name} » de cet appareil ? Cette action est définitive.`)) return;
     delItem(id).then(() => { SC.msg = "Partition supprimée."; return reload(); });
+  }
+  else if (a === "sc-free") {
+    const m = SC.items.find(x => x.id === id); if (!m || !m.drive) return;
+    if (!confirm(`Retirer le fichier « ${m.name} » de cet appareil ? Il reste sur Google Drive et sera téléchargé quand tu l’ouvriras.`)) return;
+    const chk = window.__driveHas ? window.__driveHas(m.drive) : Promise.resolve(false);
+    chk.then(ok => { if (!ok) throw new Error("Impossible de vérifier la copie sur Drive : le fichier est conservé sur l’appareil."); return dropBlob(id, m.drive); })
+      .then(() => { SC.msg = `« ${m.name} » est maintenant sur Drive seulement (vignette gardée).`; return reload(); }).catch(x => note(x.message));
   }
   else if (a === "sc-pl") { const pl = window.__pl; if (pl) { const n = pl.add("@score:" + id); const m = SC.items.find(x => x.id === id); SC.msg = `« ${m ? m.name : "Partition"} » ajoutée à la playlist « ${n} ».`; renderScores(); } }
   else if (a === "sc-page") {
@@ -255,7 +288,7 @@ document.addEventListener("click", ev => {
   else if (a === "sc-zoom") { if (SC.view) { SC.view.z = Math.max(.5, Math.min(5, SC.view.z + .5 * +t.dataset.v)); drawView(); } }
   else if (a === "sc-close") closeView();
   else if (a === "sc-song") {                               // une photo → l'analyse d'accords (nécessite la clé OpenRouter, sinon saisie à la main)
-    getBlob(id).then(b => { if (!b || !window.__an) return; const r = new FileReader(); r.onload = () => { closeView(); window.__an.setPhoto(r.result); }; r.readAsDataURL(b); });
+    blobOf(id).then(b => { if (!b || !window.__an) return; const r = new FileReader(); r.onload = () => { closeView(); window.__an.setPhoto(r.result); }; r.readAsDataURL(b); }).catch(x => note(x.message));
   }
   else if (a === "sc-keep") {                               // depuis Analyse : garder la photo en cours dans Partitions
     const src = window.__an && window.__an.getPhoto(); if (!src) return;
@@ -275,7 +308,7 @@ document.addEventListener("change", ev => {
 });
 document.addEventListener("keydown", ev => { if (ev.key === "Escape" && SC.view) closeView(); });
 
-window.__scores = { listMeta, getBlob, putItem, prepImage, reload, peek: id => SC.items.find(x => x.id === id), loaded: () => SC.loaded, ensure: () => SC.loaded ? Promise.resolve() : listMeta().then(a => { SC.items = a; SC.loaded = true; }).catch(() => { SC.loaded = true; }) };
+window.__scores = { listMeta, getBlob, putItem, setMeta, dropBlob, prepImage, reload, items: () => SC.items, peek: id => SC.items.find(x => x.id === id), loaded: () => SC.loaded, ensure: () => SC.loaded ? Promise.resolve() : listMeta().then(a => { SC.items = a; SC.loaded = true; }).catch(() => { SC.loaded = true; }) };
 renderTop();                                   // l'onglet apparaît dès le chargement
 if (S.tab === "scores") render();
 })();
