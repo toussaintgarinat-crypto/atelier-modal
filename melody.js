@@ -445,6 +445,44 @@ function propsHtml(si) {
     }).join("")}</div></div>`;
 }
 
+/* ---------- extrait : couper quelques mesures d'une section et en faire un morceau placé dans une playlist ---------- */
+const CUT = {};                                   // par section : { a, b, pl, msg }
+function cutHtml(si, sec) {
+  const nb = sec.bars.length, cu = CUT[si] || (CUT[si] = {}), a = Math.min(Math.max(cu.a || 1, 1), nb), b = Math.min(Math.max(cu.b || nb, a), nb);
+  const pl = window.__pl, names = pl ? pl.names() : [], plc = cu.pl >= 0 && cu.pl < names.length ? cu.pl : (pl ? pl.cur() : 0);
+  const opts = (from, to, sel) => Array.from({ length: to - from + 1 }, (_, i) => `<option value="${from + i}" ${from + i === sel ? "selected" : ""}>${from + i}</option>`).join("");
+  return `<div class="tr" style="margin-top:6px;flex-wrap:wrap;gap:6px"><span class="muted">✂ Extrait : mesures</span>
+      <select data-act="cut-a" data-si="${si}" aria-label="Première mesure">${opts(1, nb, a)}</select><span class="muted">à</span>
+      <select data-act="cut-b" data-si="${si}" aria-label="Dernière mesure">${opts(a, nb, b)}</select>
+      ${names.length ? `<select data-act="cut-pl" data-si="${si}" aria-label="Playlist">${names.map((n, i) => `<option value="${i}" ${i === plc ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>` : ""}
+      <button class="btn sm sec" data-act="cut-go" data-si="${si}" ${pl ? "" : "disabled"} title="Crée un morceau avec ces mesures (thème et accords) et l'ajoute à la playlist">✂ Couper vers la playlist</button></div>
+     ${cu.msg ? `<div class="muted" style="margin-top:4px">${esc(cu.msg)}</div>` : ""}`;
+}
+function cutSong(si) {
+  const sec = S.song.sections[si], cu = CUT[si] || (CUT[si] = {}), nb = sec.bars.length;
+  const a = Math.min(Math.max(cu.a || 1, 1), nb), b = Math.min(Math.max(cu.b || nb, a), nb), plx = window.__pl;
+  const cut = v => { const o = JSON.parse(JSON.stringify(v)); if (v.mel) o.mel = v.mel.filter(n => n[0] >= a - 1 && n[0] <= b - 1).map(n => [n[0] - (a - 1)].concat(n.slice(1))); if (!(o.mel && o.mel.length)) delete o.mel; return o; };
+  const ns = cut(sec); ns.bars = JSON.parse(JSON.stringify(sec.bars.slice(a - 1, b))); ns.rep = 1;
+  if (sec.st) ns.st = sec.st.map(cut);
+  const name = `${S.song.name || "Morceau"} — ${sec.name || "Section"} m.${a}${b > a ? "-" + b : ""}`.slice(0, 80);
+  const ex = JSON.parse(JSON.stringify(S.song)); ex.name = name; ex.sections = [ns];
+  const all = lsGet("atelier-modal-songs") || {}; all[name] = { song: ex, tonic: [S.tonic.l, S.tonic.a] };
+  if (!lsSet("atelier-modal-songs", all)) { cu.msg = "Enregistrement impossible ici."; return; }
+  const pn = plx.add(name, cu.pl >= 0 ? cu.pl : plx.cur());
+  cu.msg = `✓ « ${name} » est enregistré et ajouté à la playlist « ${pn} ».`;
+}
+document.addEventListener("click", ev => {
+  const t = ev.target.closest('[data-act="cut-go"]'); if (!t) return;
+  const si = +t.dataset.si; if (!S.song.sections[si]) return;
+  cutSong(si); refresh(); renderPicker && renderPicker();
+});
+document.addEventListener("change", ev => {
+  const t = ev.target, k = t.dataset && t.dataset.act; if (k !== "cut-a" && k !== "cut-b" && k !== "cut-pl") return;
+  const si = +t.dataset.si, cu = CUT[si] || (CUT[si] = {});
+  if (k === "cut-a") { cu.a = +t.value; if ((cu.b || 0) < cu.a) cu.b = cu.a; } else if (k === "cut-b") cu.b = +t.value; else cu.pl = +t.value;
+  cu.msg = ""; refresh();
+});
+
 function themeInner(si, was) {
   const sec = S.song.sections[si], has = hasMel(sec), ed = ED.si === si, nn = allMel(sec).reduce((x, m) => x + m.length, 0), nst = nStaves(sec);
   const ctl = Array.from({ length: nst }, (_, k) => {
@@ -463,6 +501,7 @@ function themeInner(si, was) {
      ${staves}
      <div class="tr" style="margin-top:6px"><button class="btn sm sec" data-act="mel-addrow" data-si="${si}">+ 2 mesures</button>
       <button class="btn sm sec" data-act="delbar" data-si="${si}" title="Retire la dernière mesure">− mesure</button><span class="muted">${sec.bars.length} mesures</span></div>
+     ${cutHtml(si, sec)}
      <div class="tr" style="margin-top:6px">${nst < MAXST ? `<button class="btn sm sec" data-act="mel-addst" data-si="${si}">+ Ajouter une portée</button>` : ""}
       <span class="muted">Clic droit (ou appui long) sur une note : la retirer.</span></div>
      ${ed ? propsHtml(si) : ""}
@@ -659,6 +698,72 @@ songTick = function () {
 const _render = render;
 render = function () { _render.apply(this, arguments); if (S.tab !== "song" && ED.si >= 0) { ED.si = -1; syncFloat(); } };
 
+/* ---------- partition en PDF (pour Google Drive / ZIP) : pages dessinées sur canvas, assemblées en PDF sans bibliothèque ---------- */
+async function makePdf(jpgs) {
+  const enc = t => new TextEncoder().encode(t), parts = [], offs = []; let len = 0;
+  const push = d => { parts.push(d); len += d.size !== undefined ? d.size : d.byteLength; };
+  const obj = (n, head, stream) => { offs[n] = len; push(enc(`${n} 0 obj\n${head}\n`)); if (stream) { push(enc("stream\n")); push(stream); push(enc("\nendstream\n")); } push(enc("endobj\n")); };
+  push(enc("%PDF-1.4\n"));
+  obj(1, "<< /Type /Catalog /Pages 2 0 R >>");
+  obj(2, `<< /Type /Pages /Count ${jpgs.length} /Kids [${jpgs.map((_, i) => `${3 + 3 * i} 0 R`).join(" ")}] >>`);
+  for (let i = 0; i < jpgs.length; i++) {
+    const { blob, w, h } = jpgs[i], c = enc("q 595 0 0 842 0 0 cm /Im0 Do Q");
+    obj(3 + 3 * i, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /XObject << /Im0 ${4 + 3 * i} 0 R >> >> /Contents ${5 + 3 * i} 0 R >>`);
+    obj(4 + 3 * i, `<< /Type /XObject /Subtype /Image /Width ${w} /Height ${h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${blob.size} >>`, blob);
+    obj(5 + 3 * i, `<< /Length ${c.byteLength} >>`, c);
+  }
+  const n = 3 + 3 * jpgs.length, xr = len;
+  push(enc(`xref\n0 ${n}\n0000000000 65535 f \n${offs.slice(1).map(o => String(o).padStart(10, "0") + " 00000 n \n").join("")}trailer\n<< /Size ${n} /Root 1 0 R >>\nstartxref\n${xr}\n%%EOF\n`));
+  return new Blob(parts, { type: "application/pdf" });
+}
+function svgImage(svg) {
+  const m = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(svg), w = +m[1], h = +m[2];
+  const src = svg.replace(/^<svg ([^>]*?)style="[^"]*"/, "<svg $1").replace("<svg ", `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" `);
+  return new Promise((res, rej) => { const im = new Image(); im.onload = () => res({ im, w, h }); im.onerror = () => rej(new Error("Rendu de la partition impossible.")); im.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(src); });
+}
+async function songPdf(entry) {                   // entry = { song, tonic } tel qu'enregistré dans « Morceaux »
+  if (!entry || !validSong(entry.song)) throw new Error("Morceau illisible.");
+  /* 1) tout ce qui dépend de l'état de l'application (S.song, S.tonic) est calculé d'un trait, puis l'état est rétabli */
+  const keep = [S.song, S.tonic, S.dict], old = [LINE, INK, GOLD, CHORD], lay = [];
+  LINE = "#555"; INK = "#000"; GOLD = "#000"; CHORD = "#000";
+  try {
+    S.song = Object.assign(newSong(), JSON.parse(JSON.stringify(entry.song)));
+    const tt = entry.tonic && TON.find(x => x.l === entry.tonic[0] && x.a === entry.tonic[1]); if (tt) { S.tonic = tt; S.dict = tt; }
+    const so = S.song, mode = so.mode === "min" ? "mineur" : "majeur";
+    lay.push({ t: "h1", x: so.name || "Morceau" }, { t: "sub", x: `Tonalité : ${nmN(S.tonic)} ${mode} · ${so.sig} · ♩ = ${so.bpm}` });
+    so.sections.forEach((sec, si) => {
+      const sh = shiftOf(sec), rows = Math.ceil(sec.bars.length / 4);
+      lay.push({ t: "h2", x: `${sec.name}${(sec.rep || 1) > 1 ? " ×" + sec.rep : ""}${sh ? ` — en ${nmN(secTon(sec))} ${mode}` : ""}` });
+      if (hasMel(sec)) for (let r = 0; r < rows; r++) lay.push({ t: "sys", svgs: Array.from({ length: nStaves(sec) }, (_, k) => staffSvg(si, k, true, r)).concat(so.cs === false ? [] : [chordStaffSvg(si, true, r)]) });
+      else for (let r = 0; r < rows; r++) lay.push({ t: "grid", cells: Array.from({ length: 4 }, (_, k) => { const b = r * 4 + k; if (b >= sec.bars.length) return null; const c = sec.bars[b]; return { n: b + 1, x: c ? cName(spell(secTon(sec), c.d, c.s), c.q) : "" }; }) });
+    });
+  } finally { S.song = keep[0]; S.tonic = keep[1]; S.dict = keep[2]; [LINE, INK, GOLD, CHORD] = old; }
+  /* 2) dessin des pages (A4, 150 ppp) */
+  const PW = 1240, PH = 1754, M = 90, CW = PW - 2 * M, pages = []; let cvs, cx, y;
+  const page = () => { cvs = document.createElement("canvas"); cvs.width = PW; cvs.height = PH; cx = cvs.getContext("2d"); cx.fillStyle = "#fff"; cx.fillRect(0, 0, PW, PH); cx.fillStyle = "#000"; cx.textBaseline = "alphabetic"; y = M; pages.push(cvs); };
+  const room = h => { if (y + h > PH - M) page(); };
+  page();
+  for (const it of lay) {
+    if (it.t === "h1") { cx.fillStyle = "#000"; cx.font = "700 46px system-ui,sans-serif"; cx.fillText(it.x, M, y + 40, CW); y += 64; }
+    else if (it.t === "sub") { cx.fillStyle = "#444"; cx.font = "26px system-ui,sans-serif"; cx.fillText(it.x, M, y + 24, CW); y += 58; }
+    else if (it.t === "h2") { room(120); cx.fillStyle = "#000"; cx.font = "700 32px system-ui,sans-serif"; cx.fillText(it.x, M, y + 28, CW); y += 46; }
+    else if (it.t === "grid") {
+      room(100); const cw = CW / 4; cx.strokeStyle = "#555"; cx.lineWidth = 2;
+      it.cells.forEach((c, k) => { if (!c) return; cx.strokeRect(M + k * cw, y, cw, 84); cx.fillStyle = "#666"; cx.font = "18px system-ui,sans-serif"; cx.fillText(c.n, M + k * cw + 8, y + 22); cx.fillStyle = "#000"; cx.font = "700 32px system-ui,sans-serif"; cx.fillText(c.x, M + k * cw + 14, y + 62, cw - 20); });
+      y += 100;
+    } else {
+      const imgs = await Promise.all(it.svgs.map(svgImage)), sc = Math.min(CW / imgs[0].w, 2.2), tot = imgs.reduce((a, i) => a + i.h * sc, 0) + 20;
+      room(tot);
+      imgs.forEach(i => { cx.drawImage(i.im, M, y, i.w * sc, i.h * sc); y += i.h * sc; });
+      y += 20;
+    }
+  }
+  pages.forEach((c, i) => { const g = c.getContext("2d"); g.fillStyle = "#888"; g.font = "18px system-ui,sans-serif"; g.fillText(`Atelier modal · ${i + 1}/${pages.length}`, M, PH - 40); });
+  const jpgs = []; for (const c of pages) jpgs.push({ blob: await new Promise(r => c.toBlob(r, "image/jpeg", .9)), w: c.width, h: c.height });
+  return makePdf(jpgs);
+}
+
+window.__melPdf = songPdf;
 window.__mel = { toText, fromText, midiOf, vOf, chordProps, posOf, ED, printHtml };
 if (S.tab === "song") render();
 })();
