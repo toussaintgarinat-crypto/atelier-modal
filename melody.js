@@ -80,7 +80,8 @@ try { const v = JSON.parse(localStorage.getItem(K_KB)); if (v && Number.isFinite
 const DURS = [[1, "Croche"], [2, "Noire"], [3, "Noire ·"], [4, "Blanche"], [6, "Blanche ·"], [8, "Ronde"]], GLY = [8, 6, 4, 3, 2, 1];
 const SHARP_POS = [8, 5, 9, 6, 3, 7, 4], FLAT_POS = [4, 7, 3, 6, 2, 5, 1];       // position des altérations à la clé (0 = ligne du bas)
 const SHARP_L = [3, 0, 4, 1, 5, 2, 6], FLAT_L = [6, 2, 5, 1, 4, 0, 3];
-const BW = 132, ROWH = 108, LINE = "#8b98a5", INK = "#e8eef4", GOLD = "#f5b13d";
+const BW = 132, ROWH = 108;
+let LINE = "#8b98a5", INK = "#e8eef4", GOLD = "#f5b13d", CHORD = "#cdd8ff";          // couleurs de la portée (clair sur fond sombre ; inversées à l'impression)
 const keyFifths = t => fifths(t) - (S.song.mode === "min" ? 3 : 0);
 const keyAcc = t => {                      // altération de chaque lettre (0 = do … 6 = si) selon l'armure
   const f = keyFifths(t), nk = Math.abs(f) <= 7 ? Math.abs(f) : 0, k = new Array(7).fill(0);
@@ -176,8 +177,8 @@ function drawNote(x, y0, pos, g, acc) {
   if (acc) r += `<text x="${x - 14}" y="${y + 5}" font-size="15" fill="${GOLD}" text-anchor="middle">${acc}</text>`;
   return r;
 }
-function staffSvg(si) {
-  const PER = perRow();
+function staffSvg(si, print) {
+  const PER = print ? 4 : perRow();
   const sec = S.song.sections[si], t = secTon(sec), nb = sec.bars.length, ppb = perBar(), total = nb * ppb;
   const f = keyFifths(t), nk = Math.abs(f) <= 7 ? Math.abs(f) : 0, X0 = 40 + nk * 7, W = X0 + PER * BW + 6, rows = Math.ceil(nb / PER);
   const kacc = keyAcc(t);
@@ -197,7 +198,7 @@ function staffSvg(si) {
       const b = r * PER + k; if (b >= nb) break;
       const x0 = X0 + k * BW, c = sec.bars[b];
       g += `<line x1="${x0 + BW}" x2="${x0 + BW}" y1="${y0 + 40}" y2="${y0 + 72}" stroke="${LINE}" stroke-width="${b === nb - 1 ? 2.5 : 1.2}"/>`;
-      if (c) g += `<text x="${x0 + 4}" y="${y0 + 15}" font-size="12" font-weight="700" fill="#cdd8ff">${esc(cName(spell(t, c.d, c.s), c.q))}</text>`;
+      if (c) g += `<text x="${x0 + 4}" y="${y0 + 15}" font-size="12" font-weight="700" fill="${CHORD}">${esc(cName(spell(t, c.d, c.s), c.q))}</text>`;
       g += `<text x="${x0 + 3}" y="${y0 + 30}" font-size="8" fill="${LINE}">${b + 1}</text>`;
     }
   }
@@ -222,16 +223,16 @@ function staffSvg(si) {
     });
   });
   /* curseur */
-  if (ED.si === si) {
+  if (ED.si === si && !print) {
     const cp = Math.min(ED.pos, total), cb = Math.min(Math.floor(cp / ppb), nb - 1), cx = cp >= total ? X0 + (cb % PER + 1) * BW : xAt(cp), y0 = Math.floor(cb / PER) * ROWH;
     g += `<line x1="${cx}" x2="${cx}" y1="${y0 + 28}" y2="${y0 + 84}" stroke="${GOLD}" stroke-width="2"/><path d="M${cx - 4} ${y0 + 24}h8l-4 6z" fill="${GOLD}"/>`;
   }
   /* zones cliquables : une par pulsation */
-  for (let a = 0; a < total; a++) {
+  for (let a = 0; a < (print ? 0 : total); a++) {
     const row = rowOf(a);
     g += `<rect x="${xAt(a)}" y="${row * ROWH}" width="${BW / ppb}" height="${ROWH}" fill="transparent" data-act="mel-pos" data-si="${si}" data-pos="${a}" style="cursor:pointer"/>`;
   }
-  return `<svg viewBox="0 0 ${W} ${rows * ROWH}" style="width:${zoomObj().z > 1 ? zoomObj().z * 100 : 100}%;height:auto;display:block" role="img" aria-label="Portée du thème">${g}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${rows * ROWH}" style="width:${!print && zoomObj().z > 1 ? zoomObj().z * 100 : 100}%;height:auto;display:block" role="img" aria-label="Portée du thème">${g}</svg>`;
 }
 function keyboardSvg(si) {
   const t = secTon(S.song.sections[si]);
@@ -262,6 +263,33 @@ function floatBody(si) {
    <div style="margin-top:8px">${keyboardSvg(si)}</div>
    <div class="tr" style="margin-top:6px"><button class="btn sm sec" data-act="mel-oct" data-v="-1">Octave −</button><button class="btn sm sec" data-act="mel-oct" data-v="1">Octave +</button>
     <span style="flex:1"></span><button class="btn sm sec" data-act="mel-dock" title="Remettre le clavier en bas de l’écran">⤓ En bas</button></div>`;
+}
+
+
+/* ---------- partition imprimable / PDF ---------- */
+/* On prépare une page blanche (#mel-print) que le CSS d'impression affiche seule ; le navigateur propose « Enregistrer en PDF ». */
+function chordRow(sec) {
+  const t = secTon(sec);
+  return `<div class="pgrid">${sec.bars.map((c, b) => `<div class="pcell"><small>${b + 1}</small><b>${c ? esc(cName(spell(t, c.d, c.s), c.q)) : "&nbsp;"}</b></div>`).join("")}</div>`;
+}
+function printHtml() {
+  const so = S.song, mode = so.mode === "min" ? "mineur" : "majeur";
+  const old = [LINE, INK, GOLD, CHORD]; LINE = "#555"; INK = "#000"; GOLD = "#000"; CHORD = "#000";
+  try {
+    const secs = so.sections.map((sec, si) => {
+      const has = sec.mel && sec.mel.length, sh = shiftOf(sec);
+      return `<section class="psec"><h2>${esc(sec.name)}${(sec.rep || 1) > 1 ? ` <span>×${sec.rep}</span>` : ""}${sh ? ` <span>— en ${esc(nmN(secTon(sec)))} ${mode}</span>` : ""}</h2>${has ? staffSvg(si, true) : chordRow(sec)}</section>`;
+    }).join("");
+    return `<h1>${esc(so.name || "Morceau")}</h1><p class="psub">Tonalité : ${esc(nmN(S.tonic))} ${mode} · ${esc(so.sig)} · ♩ = ${so.bpm}</p>${secs}<p class="pfoot">Atelier modal</p>`;
+  } finally { [LINE, INK, GOLD, CHORD] = old; }
+}
+function printScore() {
+  let el = $("mel-print"); if (el) el.remove();
+  el = document.createElement("div"); el.id = "mel-print"; el.innerHTML = printHtml(); document.body.appendChild(el);
+  document.body.classList.add("printing");
+  const done = () => { document.body.classList.remove("printing"); const e = $("mel-print"); if (e) e.remove(); window.removeEventListener("afterprint", done); };
+  window.addEventListener("afterprint", done);
+  try { window.print(); } catch (x) { done(); alert("L’impression n’est pas disponible ici : ouvre l’application dans ton navigateur."); }
 }
 
 /* ---------- clavier flottant : se déplace en le glissant par sa barre ---------- */
@@ -341,7 +369,8 @@ renderSong = function () {
   const first = document.querySelector('#panel input[data-act="secname"]');
   if (first && !$("zoomcard")) {
     const z = document.createElement("div"); z.className = "card"; z.id = "zoomcard";
-    z.innerHTML = `<div class="tr"><span class="muted">Zoom des sections</span><button class="btn sm sec" data-act="mel-zoom" data-v="-1" ${zi === 0 ? "disabled" : ""}>− Dézoomer</button><b>${Math.round(zoomObj().z * 100)} %</b><button class="btn sm sec" data-act="mel-zoom" data-v="1" ${zi === ZOOMS.length - 1 ? "disabled" : ""}>Zoomer +</button></div>`;
+    z.innerHTML = `<div class="tr"><span class="muted">Zoom des sections</span><button class="btn sm sec" data-act="mel-zoom" data-v="-1" ${zi === 0 ? "disabled" : ""}>− Dézoomer</button><b>${Math.round(zoomObj().z * 100)} %</b><button class="btn sm sec" data-act="mel-zoom" data-v="1" ${zi === ZOOMS.length - 1 ? "disabled" : ""}>Zoomer +</button></div>
+     <div class="tr" style="margin-top:8px"><button class="btn sm" data-act="mel-pdf">📄 Enregistrer en PDF / Imprimer</button><span class="muted">partition : accords + thème</span></div>`;
     first.closest(".card").before(z);
   }
   const pn = $("panel"); if (pn) { pn.style.setProperty("--cols", zoomObj().c); pn.style.setProperty("--z", zoomObj().z); }
@@ -357,6 +386,7 @@ renderSong = function () {
 document.addEventListener("click", ev => {
   const t = ev.target.closest("[data-act]"); if (!t || !/^mel-/.test(t.dataset.act)) return;
   const act = t.dataset.act, sec = S.song.sections[ED.si >= 0 ? ED.si : +t.dataset.si], si = +t.dataset.si;
+  if (act === "mel-pdf") { printScore(); return; }
   if (act === "mel-zoom") { setZoom(zi + +t.dataset.v); return; }
   if (act === "mel-voice") { S.song.melOff = !S.song.melOff; if (!S.song.melOff) delete S.song.melOff; persist(); render(); return; }
   if (act === "mel-edit") {
@@ -427,6 +457,6 @@ songTick = function () {
 const _render = render;
 render = function () { _render.apply(this, arguments); if (S.tab !== "song" && ED.si >= 0) { ED.si = -1; syncFloat(); } };
 
-window.__mel = { toText, fromText, midiOf };
+window.__mel = { toText, fromText, midiOf, printHtml };
 if (S.tab === "song") render();
 })();
