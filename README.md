@@ -4,6 +4,8 @@
 théorie modale et travailler l'improvisation sur piano et guitare. Elle fonctionne sans serveur ni
 dépendance : du HTML, du CSS et du JavaScript pur. Interface en français.
 
+La page [Pourquoi Atelier modal ?](pourquoi.html) résume la proposition de valeur en un coup d'œil.
+
 ## Ce que fait l'application
 
 ### Explorer les gammes et les modes
@@ -93,12 +95,14 @@ l'analyse par photo (OpenRouter) et la sauvegarde Google Drive, toutes deux à t
 | Fichier | Rôle |
 |---|---|
 | `index.html`, `style.css` | page et styles |
+| `pourquoi.html` | page « Pourquoi Atelier modal ? » |
 | `app.js` | cœur : théorie (gammes, modes, accords), instruments, lecture audio, grilles |
 | `analyse.js` | analyse par photo / saisie manuelle, playlists |
 | `transpose.js`, `modul.js` | transposition et modulation par section |
 | `melody.js` | voix « Thème » : saisie de mélodie, harmonisation, export |
 | `partitions.js` | onglet Partitions (photos / PDF) |
 | `share.js`, `qrcode.js` | partage par lien et QR code |
+| `agencement.js` | navigation en deux groupes, barre du haut et cartes repliables |
 | `sauvegarde.js` | sauvegarde ZIP et Google Drive |
 | `manifest.webmanifest`, `sw.js`, `icons/` | installation et mode hors ligne |
 | `vercel.json` | en-têtes pour l'hébergement Vercel |
