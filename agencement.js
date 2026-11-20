@@ -37,9 +37,7 @@ function fold(card, key) {
   d.addEventListener("toggle", () => { d.open ? opened.add(key) : opened.delete(key); });
 }
 
-const _render = render;
-render = function () {
-  _render.apply(this, arguments);
+function arrange() {
   if (S.tab !== "song") return;
   const p = $("panel"); if (!p) return;
   [...p.children].forEach(c => {
@@ -48,7 +46,20 @@ render = function () {
     const key = FOLD.find(f => h.textContent.replace(/^[^A-Za-zÉé]+/, "").startsWith(f));
     if (key) fold(c, key);
   });
-};
+  /* Carte « Mesure » : les deux longues listes d'idées d'accords sont repliées (ouvertes seulement à la demande). */
+  p.querySelectorAll("details:not(.fold):not([data-arr])").forEach(d => {
+    const t = (d.querySelector("summary") || {}).textContent || "";
+    const key = /Enchaînements classiques/.test(t) ? "Enchaînements" : /Changer de couleur/.test(t) ? "Couleur" : null;
+    if (!key) return;
+    d.dataset.arr = key; d.open = opened.has(key);
+    d.addEventListener("toggle", () => { d.open ? opened.add(key) : opened.delete(key); });
+  });
+}
+
+const _render = render, _renderSong = renderSong, _renderPicker = renderPicker;
+render = function () { _render.apply(this, arguments); arrange(); };
+renderSong = function () { _renderSong.apply(this, arguments); arrange(); };
+renderPicker = function () { _renderPicker.apply(this, arguments); arrange(); };
 
 if (typeof renderTop === "function") { try { render(); } catch (e) { /* premier rendu déjà fait par app.js */ } }
 })();

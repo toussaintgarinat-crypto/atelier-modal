@@ -173,3 +173,7 @@ details.fold>summary::after{content:"▾";float:right;color:var(--mu)}
 details.fold[open]>summary::after{content:"▴"}
 details.fold>:not(summary){margin-left:12px;margin-right:12px}
 details.fold>:last-child{margin-bottom:12px}
+
+#panel .sug{width:auto}
+#panel .card:has(>button.sug){display:block}
+@media(min-width:560px){#panel .card>button.sug{display:inline-block;width:calc(50% - 4px);vertical-align:top;margin-right:4px}}
