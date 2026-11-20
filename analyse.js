@@ -1,4 +1,4 @@
-/* Atelier modal — onglets Analyse (photo / saisie manuelle, OpenRouter) et Playlist.
+/* Atelier modal — onglets Analyse (photo / saisie manuelle, clé d’API au choix) et Playlist.
    Chargé après app.js : réutilise ses fonctions globales (S, mkChord, spell, cName, loadSongObj, startSong…). */
 (function () {
 "use strict";
@@ -282,7 +282,25 @@ function toSong(res, name, sig) {
 const multiBars = res => res.parsed.sections.some(s => s.bars.some(b => b.filter(c => !c.err).length > 1));
 
 /* ================= OpenRouter ================= */
-const OR = Object.assign({ key: "", model: "" }, lsGet(K_OR) || {});
+/* Fournisseurs de lecture de photo : tous parlent le format « chat completions » d’OpenAI avec une image en entrée. */
+const PROV = {
+  openrouter: { name: "OpenRouter", base: "https://openrouter.ai/api/v1", ph: "Clé OpenRouter (sk-or-…)", ex: "google/gemini-2.5-flash", extra: true },
+  openai: { name: "OpenAI", base: "https://api.openai.com/v1", ph: "Clé OpenAI (sk-…)", ex: "gpt-4o-mini", vision: /gpt-4o|gpt-4\.1|gpt-5|chatgpt-4o|o4|vision/i },
+  google: { name: "Google (Gemini)", base: "https://generativelanguage.googleapis.com/v1beta/openai", ph: "Clé Google AI Studio (AIza…)", ex: "gemini-2.5-flash", vision: /gemini/i, strip: /^models\// },
+  opencode: { name: "OpenCode Go", base: "https://opencode.ai/zen/go/v1", ph: "Clé OpenCode Go", ex: "kimi-k2.5" },
+  custom: { name: "Autre fournisseur", base: "", ph: "Clé de l’API", ex: "nom-du-modèle" }
+};
+const OS = Object.assign({ provider: "openrouter", keys: {}, models: {}, base: "" }, lsGet(K_OR) || {});
+if (OS.key !== undefined || OS.model !== undefined) {            // anciens réglages (OpenRouter seul)
+  if (OS.key) OS.keys.openrouter = OS.key; if (OS.model) OS.models.openrouter = OS.model; delete OS.key; delete OS.model;
+}
+if (!PROV[OS.provider]) OS.provider = "openrouter";
+const OR = {                                                      // la clé et le modèle du fournisseur choisi
+  get key() { return OS.keys[OS.provider] || ""; }, set key(v) { OS.keys[OS.provider] = v; },
+  get model() { return OS.models[OS.provider] || ""; }, set model(v) { OS.models[OS.provider] = v; }
+};
+const provBase = () => (OS.provider === "custom" ? (OS.base || "").trim() : PROV[OS.provider].base).replace(/\/+$/, "");
+const provHost = () => { try { return new URL(provBase()).host; } catch (x) { return provBase() || "?"; } };
 const AN = { flow: false, text: "", name: "Grille analysée", sig: "4/4", img: null, status: "", busy: false, res: null, parsed: null, models: [], setOpen: false };
 { const sv = lsGet(K_AN); if (sv && typeof sv.text === "string") { AN.text = sv.text; if (sv.name) AN.name = sv.name; } }
 const persistAN = () => lsSet(K_AN, { text: AN.text, name: AN.name });
@@ -307,33 +325,36 @@ function shrink(file) {
   });
 }
 async function orFetch(path, opt) {
+  const P = PROV[OS.provider];
+  if (!provBase()) throw new Error("Renseigne l’adresse de l’API dans les réglages.");
   const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 90000);
   try {
-    const r = await fetch("https://openrouter.ai/api/v1" + path, Object.assign({ signal: ctl.signal }, opt));
+    const r = await fetch(provBase() + path, Object.assign({ signal: ctl.signal }, opt));
     let j = null; try { j = await r.json(); } catch (x) { }
     if (!r.ok) {
       const m = j && j.error && j.error.message ? j.error.message : "";
-      if (r.status === 401) throw new Error("Clé OpenRouter refusée (401). Vérifie-la dans les réglages.");
-      if (r.status === 402) throw new Error("Crédits OpenRouter insuffisants (402).");
+      if (r.status === 401) throw new Error(`Clé ${P.name} refusée (401). Vérifie-la dans les réglages.`);
+      if (r.status === 402) throw new Error("Crédits ou quota insuffisants (402).");
+      if (r.status === 403) throw new Error("Accès refusé (403) : vérifie la clé et ses droits.");
       if (r.status === 429) throw new Error("Trop de requêtes (429) : réessaie dans un instant.");
-      throw new Error("OpenRouter : " + (m || ("erreur " + r.status)));
+      throw new Error(P.name + " : " + (m || ("erreur " + r.status)));
     }
     return j;
   } catch (x) {
     if (x.name === "AbortError") throw new Error("Le modèle met trop de temps à répondre. Réessaie ou choisis un autre modèle.");
-    if (x instanceof TypeError) throw new Error("Connexion à OpenRouter impossible (réseau).");
+    if (x instanceof TypeError) throw new Error(`Connexion à ${P.name} impossible (réseau, ou ce service refuse les appels depuis un navigateur).`);
     throw x;
   } finally { clearTimeout(to); }
 }
 async function readPhoto() {
   if (!AN.img) return setStatus("Choisis d’abord une photo.");
-  if (!OR.key || !OR.model) { AN.setOpen = true; return setStatus("Renseigne ta clé OpenRouter et un modèle dans les réglages ci-dessous (ou tape les accords à la main)."); }
+  if (!OR.key || !OR.model) { AN.setOpen = true; return setStatus("Renseigne ta clé d’API et un modèle dans les réglages ci-dessous (ou tape les accords à la main)."); }
   AN.busy = true; setStatus("Lecture de la photo par le modèle… (quelques secondes)");
   try {
     const j = await orFetch("/chat/completions", {
       method: "POST",
-      headers: { "Authorization": "Bearer " + OR.key, "Content-Type": "application/json", "HTTP-Referer": location.origin, "X-Title": "Atelier modal" },
-      body: JSON.stringify({ model: OR.model, temperature: 0, messages: [{ role: "user", content: [{ type: "text", text: PROMPT }, { type: "image_url", image_url: { url: AN.img } }] }] })
+      headers: Object.assign({ "Authorization": "Bearer " + OR.key, "Content-Type": "application/json" }, PROV[OS.provider].extra ? { "HTTP-Referer": location.origin, "X-Title": "Atelier modal" } : {}),
+      body: JSON.stringify({ model: OR.model, messages: [{ role: "user", content: [{ type: "text", text: PROMPT }, { type: "image_url", image_url: { url: AN.img } }] }] })
     });
     let t = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
     if (Array.isArray(t)) t = t.map(x => x.text || "").join("\n");
@@ -348,15 +369,24 @@ async function readPhoto() {
 async function loadModels() {
   setStatus("Chargement de la liste des modèles de vision…");
   try {
-    const j = await orFetch("/models", { method: "GET" });
+    const P = PROV[OS.provider], j = await orFetch("/models", { method: "GET" });
     const arr = (j && j.data || []).filter(m => {
       const a = m.architecture || {};
-      return (a.input_modalities || []).includes("image") || /image/.test((a.modality || "").split("->")[0]);
-    }).map(m => ({ id: m.id, name: m.name || m.id })).sort((a, b) => a.name.localeCompare(b.name));
+      if (OS.provider === "openrouter") return (a.input_modalities || []).includes("image") || /image/.test((a.modality || "").split("->")[0]);
+      return P.vision ? P.vision.test(String(m.id)) : true;
+    }).map(m => { const id = P.strip ? String(m.id).replace(P.strip, "") : m.id; return { id, name: m.name || id }; }).sort((a, b) => a.name.localeCompare(b.name));
     AN.models = arr; AN.status = arr.length + " modèles de vision disponibles : choisis-en un dans le champ Modèle."; AN.setOpen = true;
   } catch (x) { AN.status = x.message; }
   if (S.tab === "analyse") renderAnalyse();
 }
+function readSettings() {            // recopie les champs des réglages dans le fournisseur choisi
+  const k = $("or-key"), m = $("or-model"), b = $("or-base");
+  if (k) OR.key = k.value.trim(); if (m) OR.model = m.value.trim(); if (b) OS.base = b.value.trim();
+}
+document.addEventListener("change", ev => {
+  const t = ev.target.closest("#or-prov"); if (!t) return;
+  readSettings(); OS.provider = t.value; lsSet(K_OR, OS); AN.models = []; AN.setOpen = true; AN.status = ""; renderAnalyse();
+});
 function setStatus(t) { AN.status = t; const el = $("an-status"); if (el) el.textContent = t; }
 
 /* ================= Écran Analyse ================= */
@@ -412,10 +442,12 @@ function renderAnalyse() {
    <div class="muted" id="an-status" style="margin:6px 0">${E(AN.status)}</div>
    <textarea id="an-text" data-act="an-text" rows="7" placeholder="[Couplet]&#10;| Am7 | D7 | Gmaj7 | Cmaj7 |&#10;| F#m7b5 | B7 | Em | % |">${E(AN.text)}</textarea>
    <div class="tr" style="margin-top:8px"><button class="btn" data-act="an-go">Analyser</button><button class="btn sm sec" data-act="an-clear">Vider</button></div>
-   <details id="an-set" ${AN.setOpen ? "open" : ""}><summary>Réglages OpenRouter (lecture de photo)</summary>
-    <div class="muted" style="margin:6px 0">Optionnel : sans clé, tape simplement les accords. Ta clé reste dans ce navigateur et n’est envoyée qu’à openrouter.ai. Évite de l’enregistrer sur un appareil partagé.</div>
-    <div class="tr"><input class="nm" id="or-key" type="password" autocomplete="off" placeholder="Clé OpenRouter (sk-or-…)" value="${E(OR.key)}"></div>
-    <div class="tr" style="margin-top:6px"><input class="nm" id="or-model" list="or-models" autocomplete="off" placeholder="Modèle de vision, ex. google/gemini-2.5-flash" value="${E(OR.model)}">
+   <details id="an-set" ${AN.setOpen ? "open" : ""}><summary>Réglages de la lecture de photo (clé d’API)</summary>
+    <div class="muted" style="margin:6px 0">Optionnel : sans clé, tape simplement les accords. Ta clé reste dans ce navigateur et n’est envoyée qu’à ${E(provHost())}. Évite de l’enregistrer sur un appareil partagé.</div>
+    <div class="tr"><span class="muted">Fournisseur</span><select id="or-prov" data-act="or-prov" style="flex:1">${Object.keys(PROV).map(k => `<option value="${k}" ${k === OS.provider ? "selected" : ""}>${E(PROV[k].name)}</option>`).join("")}</select></div>
+    ${OS.provider === "custom" ? `<div class="tr" style="margin-top:6px"><input class="nm" id="or-base" autocomplete="off" placeholder="Adresse de l’API (compatible OpenAI), ex. https://exemple.com/v1" value="${E(OS.base)}"></div>` : ""}
+    <div class="tr" style="margin-top:6px"><input class="nm" id="or-key" type="password" autocomplete="off" placeholder="${E(PROV[OS.provider].ph)}" value="${E(OR.key)}"></div>
+    <div class="tr" style="margin-top:6px"><input class="nm" id="or-model" list="or-models" autocomplete="off" placeholder="Modèle de vision, ex. ${E(PROV[OS.provider].ex)}" value="${E(OR.model)}">
      <datalist id="or-models">${AN.models.map(m => `<option value="${E(m.id)}">${E(m.name)}</option>`).join("")}</datalist></div>
     <div class="tr" style="margin-top:8px"><button class="btn sm" data-act="or-save">Enregistrer</button><button class="btn sm sec" data-act="or-models">Charger les modèles de vision</button><button class="btn sm sec" data-act="or-erase">Effacer ma clé</button></div>
    </details></div>
@@ -553,7 +585,7 @@ document.addEventListener("click", ev => {
     case "an-pick": $("an-file").click(); break;
     case "sng-photo": {                                   // depuis Morceaux : on ouvre l'analyse et le choix de la photo d'un seul geste
       stopSong(); AN.flow = true; AN.res = null; AN.img = null;
-      AN.status = OR.key && OR.model ? "Choisis ou prends la photo de la partition : elle sera lue puis analysée." : "Choisis la photo. Sans clé OpenRouter (réglages ci-dessous), elle ne peut pas être lue toute seule : tape les accords en la regardant.";
+      AN.status = OR.key && OR.model ? "Choisis ou prends la photo de la partition : elle sera lue puis analysée." : "Choisis la photo. Sans clé d’API (réglages ci-dessous), elle ne peut pas être lue toute seule : tape les accords en la regardant.";
       if (!OR.key || !OR.model) AN.setOpen = true;
       S.tab = "analyse"; render();
       const f = $("an-file"); if (f) f.click();
@@ -571,12 +603,12 @@ document.addEventListener("click", ev => {
     case "an-go": runAnalyse(); break;
     case "an-clear": AN.text = ""; AN.res = null; AN.img = null; AN.status = ""; persistAN(); renderAnalyse(); break;
     case "or-save": {
-      OR.key = $("or-key").value.trim(); OR.model = $("or-model").value.trim();
-      AN.status = lsSet(K_OR, OR) ? "Réglages enregistrés sur cet appareil." : "Enregistrement impossible ici (stockage bloqué) : les réglages ne seront pas gardés.";
+      readSettings();
+      AN.status = lsSet(K_OR, OS) ? "Réglages enregistrés sur cet appareil." : "Enregistrement impossible ici (stockage bloqué) : les réglages ne seront pas gardés.";
       AN.setOpen = true; renderAnalyse(); break;
     }
-    case "or-erase": OR.key = ""; lsSet(K_OR, OR); AN.status = "Clé effacée de cet appareil."; renderAnalyse(); break;
-    case "or-models": { const k = $("or-key"), m = $("or-model"); if (k) OR.key = k.value.trim(); if (m) OR.model = m.value.trim(); loadModels(); break; }
+    case "or-erase": OR.key = ""; lsSet(K_OR, OS); AN.status = "Clé effacée de cet appareil."; renderAnalyse(); break;
+    case "or-models": readSettings(); lsSet(K_OR, OS); loadModels(); break;
     case "an-send": {
       if (!AN.res || AN.res.error) break;
       const song = toSong(AN.res, AN.name, AN.sig);
@@ -640,7 +672,7 @@ document.addEventListener("change", ev => {
       const f = t.files && t.files[0]; if (!f) break;
       setStatus("Préparation de la photo…");
       shrink(f).then(d => {
-        AN.img = d; AN.status = AN.flow && !(OR.key && OR.model) ? "Photo prête. Sans clé OpenRouter elle ne peut pas être lue toute seule : tape les accords en la regardant, ou ajoute ta clé dans les réglages ci-dessous." : "Photo prête. Appuie sur « Lire la photo » (ou tape les accords à la main)."; renderAnalyse();
+        AN.img = d; AN.status = AN.flow && !(OR.key && OR.model) ? "Photo prête. Sans clé d’API elle ne peut pas être lue toute seule : tape les accords en la regardant, ou ajoute ta clé dans les réglages ci-dessous." : "Photo prête. Appuie sur « Lire la photo » (ou tape les accords à la main)."; renderAnalyse();
         const auto = AN.flow && OR.key && OR.model; AN.flow = false;
         if (auto) readPhoto().then(() => { if (AN.text.trim() && !AN.busy) { runAnalyse(); AN.status += " Vérifie les accords avant d’enregistrer ou de partager."; } });
       }).catch(x => setStatus(x.message));
@@ -660,7 +692,7 @@ window.__analyse = { parseChord, parseGrid, analyse, toSong };
 window.__an = {
   setPhoto(dataUrl) {
     AN.img = dataUrl; AN.res = null; AN.flow = false;
-    AN.status = OR.key && OR.model ? "Photo prête. Appuie sur « Lire la photo »." : "Photo prête. Sans clé OpenRouter elle ne peut pas être lue toute seule : tape les accords en la regardant, ou ajoute ta clé dans les réglages ci-dessous.";
+    AN.status = OR.key && OR.model ? "Photo prête. Appuie sur « Lire la photo »." : "Photo prête. Sans clé d’API elle ne peut pas être lue toute seule : tape les accords en la regardant, ou ajoute ta clé dans les réglages ci-dessous.";
     if (!(OR.key && OR.model)) AN.setOpen = true;
     S.tab = "analyse"; render();
   },

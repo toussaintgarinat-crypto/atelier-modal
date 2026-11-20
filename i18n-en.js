@@ -368,12 +368,12 @@ window.__EN = {
 "Lecture terminée. Vérifie et corrige les accords": "Reading finished. Check and correct the chords",
 "Photo prête. Appuie sur « Lire la photo » (ou tape les accords à la main).": "Photo ready. Press “Read the photo” (or type the chords by hand).",
 "Photo prête. Appuie sur « Lire la photo ».": "Photo ready. Press “Read the photo”.",
-"Photo prête. Sans clé OpenRouter elle ne peut pas être lue toute seule : tape les accords en la regardant, ou ajoute ta clé dans les réglages ci-dessous.": "Photo ready. Without an OpenRouter key it cannot be read automatically: type the chords while looking at it, or add your key in the settings below.",
-"Choisis la photo. Sans clé OpenRouter (réglages ci-dessous), elle ne peut pas être lue toute seule : tape les accords en la regardant.": "Choose the photo. Without an OpenRouter key (settings below), it cannot be read automatically: type the chords while looking at it.",
-"Renseigne ta clé OpenRouter et un modèle dans les réglages ci-dessous (ou tape les accords à la main).": "Enter your OpenRouter key and a model in the settings below (or type the chords by hand).",
+"Photo prête. Sans clé d’API elle ne peut pas être lue toute seule : tape les accords en la regardant, ou ajoute ta clé dans les réglages ci-dessous.": "Photo ready. Without an API key it cannot be read automatically: type the chords while looking at it, or add your key in the settings below.",
+"Choisis la photo. Sans clé d’API (réglages ci-dessous), elle ne peut pas être lue toute seule : tape les accords en la regardant.": "Choose the photo. Without an API key (settings below), it cannot be read automatically: type the chords while looking at it.",
+"Renseigne ta clé d’API et un modèle dans les réglages ci-dessous (ou tape les accords à la main).": "Enter your API key and a model in the settings below (or type the chords by hand).",
 "Préparation de la photo…": "Preparing the photo…", "Lecture de la photo par le modèle… (quelques secondes)": "The model is reading the photo… (a few seconds)",
 "Image illisible.": "Unreadable image.", "Lecture du fichier impossible.": "Cannot read the file.",
-"Réglages OpenRouter (lecture de photo)": "OpenRouter settings (photo reading)",
+"Réglages de la lecture de photo (clé d’API)": "Photo reading settings (API key)",
 "Optionnel : sans clé, tape simplement les accords. Ta clé reste dans ce navigateur et n’est envoyée qu’à openrouter.ai. Évite de l’enregistrer sur un appareil partagé.": "Optional: without a key, just type the chords. Your key stays in this browser and is only sent to openrouter.ai. Avoid saving it on a shared device.",
 "Clé OpenRouter (sk-or-…)": "OpenRouter key (sk-or-…)", "Modèle de vision, ex. google/gemini-2.5-flash": "Vision model, e.g. google/gemini-2.5-flash",
 "Charger les modèles de vision": "Load the vision models", "Effacer ma clé": "Erase my key",
@@ -452,7 +452,7 @@ window.__EN = {
 "Demande à l’autre personne de scanner ce QR code avec l’appareil photo de son téléphone : le morceau s’ouvre dans l’application et elle choisit de l’importer.": "Ask the other person to scan this QR code with their phone's camera: the song opens in the app and they choose whether to import it.",
 "Scanne le QR code avec l’appareil photo de ton téléphone : le lien ouvre l’application. Tu peux aussi coller le lien reçu ci-dessous.": "Scan the QR code with your phone's camera: the link opens the app. You can also paste the received link below.",
 "Ce morceau a été envoyé par quelqu’un d’autre. Tu peux l’ouvrir pour l’écouter, ou l’ajouter à tes morceaux.": "This song was sent by someone else. You can open it to listen to it, or add it to your songs.",
-"Recevoir un morceau (QR code ou lien) ne demande aucune clé. Lire une photo de partition demande une clé OpenRouter, à régler une fois dans l’onglet Analyse ; sans clé, tu peux taper les accords en regardant la photo. Pour garder une photo ou un PDF": "Receiving a song (QR code or link) needs no key. Reading a score photo needs an OpenRouter key, set once in the Analysis tab; without a key, you can type the chords while looking at the photo. To keep a photo or a PDF",
+"Recevoir un morceau (QR code ou lien) ne demande aucune clé. Lire une photo de partition demande une clé d’API (OpenRouter, Google, OpenAI…), à régler une fois dans l’onglet Analyse ; sans clé, tu peux taper les accords en regardant la photo. Pour garder une photo ou un PDF": "Receiving a song (QR code or link) needs no key. Reading a score photo needs an API key (OpenRouter, Google, OpenAI…), set once in the Analysis tab; without a key, you can type the chords while looking at the photo. To keep a photo or a PDF",
 
 /* ---------- Sauvegarde ---------- */
 "Sauvegarde": "Backup", "☁ Google Drive": "☁ Google Drive", "☁ Sauvegarder sur Drive": "☁ Back up to Drive", "⬇ Restaurer depuis Drive": "⬇ Restore from Drive",
@@ -564,7 +564,7 @@ Object.assign(window.__EN, {
 "Un atelier de solfège et d'improvisation pour piano et guitare, qui se range dans ta poche, marche sans internet et garde tes morceaux chez toi.": "A music-theory and improvisation workshop for piano and guitar that fits in your pocket, works without internet and keeps your songs at home.",
 "Ouvrir l'application": "Open the app",
 "Confidentialité": "Privacy",
-"Tes morceaux, playlists et partitions restent sur ton appareil. Aucun compte, aucune publicité, aucun suivi. Seules deux fonctions optionnelles sortent de l'appareil, et seulement quand tu les lances : l'analyse d'une photo (avec ta propre clé OpenRouter) et la sauvegarde Google Drive (limitée aux fichiers créés par l'application).": "Your songs, playlists and scores stay on your device. No account, no ads, no tracking. Only two optional features leave the device, and only when you start them: photo analysis (with your own OpenRouter key) and the Google Drive backup (limited to the files created by the app).",
+"Tes morceaux, playlists et partitions restent sur ton appareil. Aucun compte, aucune publicité, aucun suivi. Seules deux fonctions optionnelles sortent de l'appareil, et seulement quand tu les lances : l'analyse d'une photo (avec ta propre clé d'API : OpenRouter, OpenAI, Google, OpenCode Go…) et la sauvegarde Google Drive (limitée aux fichiers créés par l'application).": "Your songs, playlists and scores stay on your device. No account, no ads, no tracking. Only two optional features leave the device, and only when you start them: photo analysis (with your own API key: OpenRouter, OpenAI, Google, OpenCode Go…) and the Google Drive backup (limited to the files created by the app).",
 "Hors ligne": "Offline",
 "Une fois ouverte, l'application fonctionne sans connexion, son compris : les sons sont synthétisés directement dans l'appareil. Elle s'installe sur l'écran d'accueil du téléphone, de la tablette ou de l'ordinateur.": "Once opened, the app works without a connection, sound included: the sounds are synthesised right on the device. It installs on the home screen of your phone, tablet or computer.",
 "Transposition": "Transposition",
@@ -618,4 +618,19 @@ Object.assign(window.__EN, {
 "Basse": "Bass", "Batterie": "Drums", "Guitare": "Guitar", "Piano": "Piano"
 });
 window.__EN_RE.unshift([/ · retiré/g, " · removed"], [/Volume : (.+)/g, "Volume: $1"]);
+Object.assign(window.__EN, {
+"Optionnel : sans clé, tape simplement les accords.": "Optional: without a key, just type the chords.",
+"Fournisseur": "Provider", "Autre fournisseur": "Other provider",
+"Clé OpenAI (sk-…)": "OpenAI key (sk-…)", "Clé Google AI Studio (AIza…)": "Google AI Studio key (AIza…)", "Clé OpenCode Go": "OpenCode Go key", "Clé de l’API": "API key",
+"Crédits ou quota insuffisants (402).": "Insufficient credits or quota (402).",
+"Accès refusé (403) : vérifie la clé et ses droits.": "Access denied (403): check the key and its permissions.",
+"Renseigne l’adresse de l’API dans les réglages.": "Enter the API address in the settings.",
+"Adresse de l’API (compatible OpenAI), ex. https://exemple.com/v1": "API address (OpenAI-compatible), e.g. https://example.com/v1"
+});
+window.__EN_RE.unshift(
+ [/Ta clé reste dans ce navigateur et n’est envoyée qu’à (.+?)\. Évite de l’enregistrer sur un appareil partagé\./g, "Your key stays in this browser and is only sent to $1. Avoid saving it on a shared device."],
+ [/Clé (.+?) refusée \(401\)\. Vérifie-la dans les réglages\./g, "$1 key rejected (401). Check it in the settings."],
+ [/Connexion à (.+?) impossible \(réseau, ou ce service refuse les appels depuis un navigateur\)\./g, "Cannot connect to $1 (network, or this service refuses calls from a browser)."],
+ [/Modèle de vision, ex\. (.+)/g, "Vision model, e.g. $1"]
+);
 

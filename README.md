@@ -63,7 +63,7 @@ La page [Pourquoi Atelier modal ?](pourquoi.html) résume la proposition de vale
 
 ### Analyser une partition ou une grille
 - **Analyse par photo** : prends en photo une grille d'accords ; un modèle de vision (via
-  [OpenRouter](https://openrouter.ai), avec ta propre clé, stockée seulement sur ton appareil) lit les
+  [OpenRouter](https://openrouter.ai), OpenAI, Google Gemini, OpenCode Go ou toute API compatible OpenAI, avec ta propre clé, stockée seulement sur ton appareil) lit les
   accords. Lecture automatique si la clé est réglée, résultat analysé **accord par accord**.
 - Saisie manuelle possible, sans aucune clé. Un bouton photo dans Morceaux mène directement à l'analyse,
   et le résultat peut être enregistré, joué dans une autre tonalité ou partagé.
@@ -96,7 +96,7 @@ utilisateurs possèdent déjà.
 
 ## Confidentialité
 Tout est stocké localement dans le navigateur. Les seules communications externes sont optionnelles :
-l'analyse par photo (OpenRouter) et la sauvegarde Google Drive, toutes deux à ton initiative.
+l'analyse par photo (le fournisseur que tu choisis) et la sauvegarde Google Drive, toutes deux à ton initiative.
 
 ## Installation et utilisation
 
