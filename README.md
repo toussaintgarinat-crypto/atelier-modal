@@ -2,7 +2,7 @@
 
 **Atelier modal** est une application web (installable, utilisable hors ligne) pour apprendre la
 théorie modale et travailler l'improvisation sur piano et guitare. Elle fonctionne sans serveur ni
-dépendance : du HTML, du CSS et du JavaScript pur. Interface en français.
+dépendance : du HTML, du CSS et du JavaScript pur. Interface en **français et en anglais** (bouton FR / EN dans l'en-tête ; la langue du navigateur est utilisée par défaut).
 
 La page [Pourquoi Atelier modal ?](pourquoi.html) résume la proposition de valeur en un coup d'œil.
 
@@ -102,6 +102,7 @@ l'analyse par photo (OpenRouter) et la sauvegarde Google Drive, toutes deux à t
 | `melody.js` | voix « Thème » : saisie de mélodie, harmonisation, export |
 | `partitions.js` | onglet Partitions (photos / PDF) |
 | `share.js`, `qrcode.js` | partage par lien et QR code |
+| `i18n.js`, `i18n-en.js` | langue de l'interface : dictionnaire français → anglais appliqué à l'affichage |
 | `agencement.js` | navigation en deux groupes, barre du haut et cartes repliables |
 | `sauvegarde.js` | sauvegarde ZIP et Google Drive |
 | `manifest.webmanifest`, `sw.js`, `icons/` | installation et mode hors ligne |
