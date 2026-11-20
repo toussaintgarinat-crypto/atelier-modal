@@ -26,25 +26,49 @@ dépendance : du HTML, du CSS et du JavaScript pur. Interface en français.
 
 ### Créer et gérer ses morceaux
 - Onglet **Morceaux** : crée tes propres morceaux, section par section, avec accords écrits en degrés,
-  donc **transposables** d'un clic (par demi-ton) et **modulables par section**.
-- **Voix « Thème »** : écris une mélodie (portées, clés, saisie par clavier ou en texte), puis
-  **harmonise-la** ; exporte le thème ou un morceau entier.
-- **Playlists** de morceaux et lecture enchaînée.
+  donc **transposables** d'un clic (par demi-ton, carte « Transposer ») et **modulables par section**
+  (chaque section peut avoir sa propre tonalité, par demi-tons ou en choisissant la tonalité).
+- **Zoom des sections** (grille et portée) et saisie ligne par ligne, « système par système ».
+- **Voix « Thème »** : une mélodie par section, jouée par-dessus les accords.
+  - Saisie **en touchant la portée**, avec un **clavier à l'écran flottant** et déplaçable (durées,
+    silences, curseur, effacement, touches noires, notes empilées pour écrire des accords).
+  - **Clic droit ou appui long** pour retirer une note ; saisie texte possible (`G4:3 Bb4:1 | …`).
+  - Une mesure est ajoutée automatiquement en fin de section ; accords proposés pour la mesure.
+- **Plusieurs voix par section** : contrechant, basse, instruments, chacune sur sa **portée** avec la
+  clé de ton choix (Sol, Fa, Ut 3, Ut 4) et son instrument. Les accords s'écrivent au-dessus de la
+  portée du thème (ou sur une portée d'accords à part, façon recueil de jazz).
+- **Outil Arranger** : répartir les accords sur des mesures, **harmoniser le thème**, échanger les lignes
+  entre portées.
+- **Playlists** de morceaux et de partitions : lecture enchaînée, tonalité de lecture au choix,
+  **renommage** d'un élément directement depuis la liste.
+- **Extraits** : envoie vers une playlist des mesures d'un morceau ou une zone découpée d'une photo.
+
+### Partition imprimable et export par instrument
+- **Export PDF / impression** d'un morceau : accords, thème, tonalité de chaque section.
+- **Export d'une partie par instrument** (avec les accords) : choisis la portée, la première et la
+  dernière mesure, ou le morceau en entier.
 
 ### Analyser une partition ou une grille
 - **Analyse par photo** : prends en photo une grille d'accords ; un modèle de vision (via
   [OpenRouter](https://openrouter.ai), avec ta propre clé, stockée seulement sur ton appareil) lit les
-  accords et en fait un morceau analysé accord par accord.
-- Saisie manuelle possible, sans aucune clé.
+  accords. Lecture automatique si la clé est réglée, résultat analysé **accord par accord**.
+- Saisie manuelle possible, sans aucune clé. Un bouton photo dans Morceaux mène directement à l'analyse,
+  et le résultat peut être enregistré, joué dans une autre tonalité ou partagé.
 
 ### Partitions (photos et PDF)
-- Onglet **Partitions** : garde tes photos et PDF tels quels, avec visionneuse, pages et découpe d'une
-  zone à extraire. Les fichiers restent **sur l'appareil** (IndexedDB), jamais envoyés ailleurs.
+- Onglet **Partitions** : garde tes photos et PDF tels quels, séparés des morceaux.
+- **Visionneuse PDF** page par page, accès direct à une page, défilement pendant le découpage.
+- **Découpage** d'une zone (photo ou PDF) pour en extraire une partie, ajoutable à une playlist.
+- Ouvrir, renommer, partager (menu de partage du téléphone), télécharger, supprimer.
+- Les fichiers restent **sur l'appareil** (IndexedDB), jamais envoyés ailleurs.
 
 ### Partager et sauvegarder
-- **Partage** d'un morceau par **QR code ou lien**, et réception d'un morceau reçu.
-- **Sauvegarde** en fichier **ZIP** (morceaux, playlists, partitions) ou sur **Google Drive** (accès
-  limité aux fichiers créés par l'application).
+- **Partage** d'un morceau par **QR code ou lien**, et réception (scan, collage d'un lien, import).
+- **Sauvegarde ZIP ou dossier** (clé USB, mail…) avec **import** : morceaux, playlists, partitions.
+- **Google Drive** (accès limité aux fichiers créés par l'application, portée `drive.file`) :
+  - sauvegarde **sélective** (tu choisis ce qui part) ;
+  - partitions écrites en **PDF**, **un PDF par instrument, avec les accords** ;
+  - partitions récupérées **à la demande**.
 
 ## Confidentialité
 Tout est stocké localement dans le navigateur. Les seules communications externes sont optionnelles :
