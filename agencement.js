@@ -15,13 +15,30 @@ const NO_TOP = ["scores", "analyse", "playlist"];                 // onglets où
 const FOLD = ["Transposer", "Envoyer / recevoir", "Google Drive", "Écrire le thème en texte"]; // cartes repliables de Morceaux
 const opened = new Set();                                          // cartes que l'utilisateur a ouvertes
 
+/* Bandeau réduit : deux boutons de groupe ; un appui déroule les onglets du groupe. */
+let openGrp = -1;
+function drawNav() {
+  const nav = $("tabs"); if (!nav) return;
+  const gi = GROUPS.findIndex(([, tabs]) => tabs.some(([k]) => k === S.tab));
+  const head = GROUPS.map(([nom, tabs], i) => {
+    const cur = (tabs.find(([k]) => k === S.tab) || [])[1];
+    return `<button class="grp ${i === gi ? "on" : ""} ${i === openGrp ? "open" : ""}" data-grp="${i}">${nom}${cur ? ` · <b>${cur}</b>` : ""} <span>${i === openGrp ? "▴" : "▾"}</span></button>`;
+  }).join("");
+  const sub = openGrp >= 0
+    ? `<div class="subtabs">${GROUPS[openGrp][1].map(([k, t]) => `<button class="${S.tab === k ? "on" : ""}" data-act="tab" data-v="${k}">${t}</button>`).join("")}</div>`
+    : "";
+  nav.innerHTML = `<div class="grps">${head}</div>${sub}`;
+}
+document.addEventListener("click", ev => {
+  const g = ev.target.closest("[data-grp]");
+  if (g) { const i = +g.dataset.grp; openGrp = openGrp === i ? -1 : i; drawNav(); return; }
+  if (ev.target.closest("#tabs [data-act=tab]")) openGrp = -1;   // l'onglet choisi re-dessine le bandeau, refermé
+}, true);
+
 const _renderTop = renderTop;
 renderTop = function () {
   _renderTop();
-  $("tabs").innerHTML = GROUPS.map(([nom, tabs]) =>
-    `<span class="tabgrp">${nom}</span>` +
-    tabs.map(([k, t]) => `<button class="${S.tab === k ? "on" : ""}" data-act="tab" data-v="${k}">${t}</button>`).join("")
-  ).join("");
+  drawNav();
   const top = $("top"); if (top) top.style.display = NO_TOP.includes(S.tab) ? "none" : "";
 };
 

@@ -164,8 +164,14 @@ body.mel-ed-open{padding-bottom:340px}
 .scbody img{display:block;margin:0 auto;height:auto}
 .plth{height:34px;width:auto;max-width:50px;object-fit:cover;border-radius:4px;vertical-align:middle;margin-right:6px;cursor:pointer}
 
-nav .tabgrp{flex:0 0 auto;align-self:center;font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--mu);opacity:.7;padding:0 6px 0 10px;border-left:1px solid var(--bd);margin-left:4px}
-nav .tabgrp:first-child{border-left:0;margin-left:0;padding-left:0}
+nav{display:block;overflow:visible;padding:6px 10px 0}
+nav .grps{display:flex;gap:6px}
+nav button.grp{flex:1 1 0;min-width:0;border:1px solid var(--bd);border-radius:10px 10px 0 0;border-bottom:0;background:var(--sf);color:var(--mu);padding:7px 10px;font-size:13px;text-align:center;overflow:hidden;text-overflow:ellipsis}
+nav button.grp.on{color:var(--tx);border-color:var(--root)}
+nav button.grp.open{background:var(--sf2)}
+nav button.grp b{font-weight:650}
+nav button.grp span{opacity:.6;font-size:11px}
+nav .subtabs{display:flex;overflow-x:auto;scrollbar-width:none;background:var(--sf2);border:1px solid var(--bd);border-top:0}
 details.fold{padding:0}
 details.fold>summary{padding:12px;font-size:14px;font-weight:650;color:var(--tx);list-style:none}
 details.fold>summary::-webkit-details-marker{display:none}
