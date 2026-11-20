@@ -183,3 +183,6 @@ details.fold>:last-child{margin-bottom:12px}
 #panel .sug{width:auto}
 #panel .card:has(>button.sug){display:block}
 @media(min-width:560px){#panel .card>button.sug{display:inline-block;width:calc(50% - 4px);vertical-align:top;margin-right:4px}}
+header h1{display:flex;align-items:baseline;gap:6px;white-space:nowrap}
+header h1>span{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+header h1>a,header h1>button{flex:none}
