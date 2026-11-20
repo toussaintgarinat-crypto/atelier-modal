@@ -578,3 +578,39 @@ Object.assign(window.__EN, {
 "Et aussi : modes et gammes avec conseils d'improvisation, grilles d'accords à jouer en boucle, écriture de mélodies sur portée avec plusieurs voix, analyse d'une grille d'accords depuis une photo, et sauvegarde en ZIP.": "And also: modes and scales with improvisation tips, chord grids to play in a loop, melody writing on staves with several voices, chord-grid analysis from a photo, and ZIP backup.",
 "Atelier modal — solfège & improvisation.": "Atelier modal — music theory & improvisation."
 });
+
+/* ---------- Orchestre et import iReal Pro ---------- */
+Object.assign(window.__EN, {
+"🥁 Orchestre": "🥁 Band", "▶ Jouer avec l’orchestre": "▶ Play with the band",
+"Basse, piano et batterie jouent la grille en direct (moteur": "Bass, piano and drums play the grid live (engine",
+"Décompte :": "Count-in:", "· fin": "· end", "Chargement des sons…": "Loading the sounds…",
+"Pas de boucle": "No loop", "La mesure choisie": "The chosen bar", "Section :": "Section:",
+"Swing moyen": "Medium swing", "Valse jazz": "Jazz waltz",
+"Rester dans la tonalité": "Stay in the key",
+"Quarte au-dessus à chaque chorus (les 12 tonalités)": "Up a fourth each chorus (all 12 keys)",
+"Demi-ton au-dessus à chaque chorus": "Up a half step each chorus", "Ton au-dessus à chaque chorus": "Up a whole step each chorus",
+"Demi-ton en dessous à chaque chorus": "Down a half step each chorus", "constant": "constant",
+"Raccourcis clavier": "Keyboard shortcuts", "lancer / arrêter ·": "start / stop ·", "tempo ±5 ·": "tempo ±5 ·",
+"tonalité ± demi-ton ·": "key ± half step ·", "supprimer la boucle": "clear the loop",
+"Impossible de charger l’orchestre (connexion internet nécessaire la première fois).": "Cannot load the band (an internet connection is needed the first time).",
+"Ce navigateur ne peut pas jouer de son.": "This browser cannot play sound.", "Impossible de lancer l’orchestre.": "Cannot start the band.", "Moteur introuvable.": "Engine not found.",
+"Importer depuis iReal Pro": "Import from iReal Pro", "Colle un lien": "Paste an",
+"(ou une playlist entière) : les morceaux sont convertis en grilles d’accords jouables, transposables et accompagnables par l’orchestre. Les reprises et les fins sont déroulées dans l’ordre de lecture.": "link (or a whole playlist): the tunes are converted into playable, transposable chord grids that the band can accompany. Repeats and endings are unrolled in playing order.",
+"Lecture…": "Reading…", "Import impossible.": "Import failed.",
+"Aucun morceau reconnu : colle un lien irealb:// complet.": "No tune recognised: paste a complete irealb:// link.",
+"Enregistrement impossible ici.": "Saving isn't possible here."
+});
+window.__EN_RE.unshift(
+ [/(\d+) morceaux? trouvés?\./g, (m,n)=>`${n} tune${+n===1?"":"s"} found.`],
+ [/(\d+) accords? non reconnus? \(mesure laissée vide\)\./g, (m,n)=>`${n} chord${+n===1?"":"s"} not recognised (bar left empty).`],
+ [/\+(\d+) BPM par chorus/g, "+$1 BPM per chorus"],
+ [/Mesures (\d+)–(\d+)/g, "Bars $1–$2"],
+ [/Enregistré sous « (.+?) » : tu peux l’ajouter à une playlist\./g, "Saved as “$1”: you can add it to a playlist."]
+);
+Object.assign(window.__EN, {
+"Un orchestre qui t'accompagne": "A band that plays along with you",
+"Une basse, un piano et une batterie jouent ta grille en direct, dans huit styles. Boucle sur les mesures qui te résistent, tour des 12 tonalités, tempo qui monte à chaque chorus. Tu peux aussi importer tes grilles iReal Pro.": "A bass, a piano and drums play your grid live, in eight styles. Loop the bars that give you trouble, go round all 12 keys, raise the tempo every chorus. You can also import your iReal Pro charts.",
+"Atelier modal — solfège & improvisation. Logiciel libre sous licence": "Atelier modal — music theory & improvisation. Free software under the",
+"code source": "source code", ". L'orchestre utilise le moteur d'": ". The band uses the engine of", "et le synthétiseur": "and the synthesizer", ".": "."
+});
+

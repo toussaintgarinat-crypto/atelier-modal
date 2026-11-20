@@ -21,6 +21,16 @@ La page [Pourquoi Atelier modal ?](pourquoi.html) résume la proposition de vale
   cycle des quartes, substitutions et explications du « pourquoi » d'un enchaînement.
 - Écoute des accords en **plaqué, arpège** ou accords tenus, avec exploration libre.
 
+### Jouer avec un orchestre
+- Sur les onglets **Grilles** et **Morceaux**, la carte **🥁 Orchestre** fait jouer la grille par une **basse, un piano et une
+  batterie** générés en direct (huit styles : swing, ballade, valse jazz, bossa nova, samba, pop rock, funk, shuffle).
+  Les sons (banque SoundFont de 4,7 Mo) ne sont téléchargés qu'à la première utilisation, puis gardés hors ligne.
+- **Modes de travail** : boucle sur une mesure, un groupe de mesures ou une section ; **tour des 12 tonalités** (une quarte, un
+  demi-ton ou un ton de plus à chaque chorus) ; **tempo qui monte** de quelques BPM à chaque chorus ; nombre de chorus au choix.
+- **Raccourcis clavier** : `Espace` lancer / arrêter, `↑` `↓` tempo ±5, `←` `→` tonalité ± demi-ton, `L` supprimer la boucle.
+- **Import iReal Pro** (onglet Morceaux) : on colle un lien `irealb://` ou une playlist entière ; les morceaux deviennent des
+  morceaux Atelier modal (reprises et fins déroulées), jouables avec l'orchestre.
+
 ### Jouer sur des grilles d'accords
 - Onglet **Grilles** : progressions prêtes à l'emploi (Pop/Rock I-V-vi-IV, Soul I-vi-ii-V, vamps
   dorien et lydien…) lues en **boucle** avec synthèse sonore intégrée (aucun fichier audio).
@@ -72,6 +82,17 @@ La page [Pourquoi Atelier modal ?](pourquoi.html) résume la proposition de vale
   - partitions écrites en **PDF**, **un PDF par instrument, avec les accords** ;
   - partitions récupérées **à la demande**.
 
+## Licence et crédits
+Atelier modal est distribué sous **GNU AGPL v3 ou ultérieure** (voir [`LICENSE`](LICENSE)), parce qu'il intègre le moteur
+d'accompagnement d'[OpenStand](https://github.com/canbmaj7/openstand) (AGPL-3.0-or-later). Le code source complet est ce dépôt.
+
+- [OpenStand](https://github.com/canbmaj7/openstand) — moteur d'accompagnement, styles, import iReal Pro (AGPL-3.0-or-later)
+- [SpessaSynth](https://github.com/spessasus/spessasynth_lib) de spessasus — synthétiseur SoundFont (Apache-2.0)
+- [GeneralUser GS](https://www.schristiancollins.com/generaluser.php) de S. Christian Collins — banque de sons (voir `openstand/GeneralUser-GS-LICENSE.txt`)
+
+iReal Pro est une marque de son propriétaire ; Atelier modal n'y est pas affilié : il lit les liens de partage que les
+utilisateurs possèdent déjà.
+
 ## Confidentialité
 Tout est stocké localement dans le navigateur. Les seules communications externes sont optionnelles :
 l'analyse par photo (OpenRouter) et la sauvegarde Google Drive, toutes deux à ton initiative.
@@ -104,6 +125,9 @@ l'analyse par photo (OpenRouter) et la sauvegarde Google Drive, toutes deux à t
 | `share.js`, `qrcode.js` | partage par lien et QR code |
 | `i18n.js`, `i18n-en.js` | langue de l'interface : dictionnaire français → anglais appliqué à l'affichage |
 | `agencement.js` | navigation en deux groupes, barre du haut et cartes repliables |
+| `bande.js` | orchestre (basse, piano, batterie), modes de travail, raccourcis, import iReal Pro |
+| `openstand/`, `vendor/` | moteur d'accompagnement d'OpenStand : sources, et version empaquetée avec sa banque de sons (voir `openstand/README.md`) |
+| `LICENSE` | GNU AGPL v3 |
 | `sauvegarde.js` | sauvegarde ZIP et Google Drive |
 | `manifest.webmanifest`, `sw.js`, `icons/` | installation et mode hors ligne |
 | `vercel.json` | en-têtes pour l'hébergement Vercel |
