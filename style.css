@@ -186,3 +186,6 @@ details.fold>:last-child{margin-bottom:12px}
 header h1{display:flex;align-items:baseline;gap:6px;white-space:nowrap}
 header h1>span{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
 header h1>a,header h1>button{flex:none}
+#band a{color:var(--ac)}
+#band .row select{min-width:0}
+kbd{font:inherit;font-size:11px;border:1px solid var(--bd);border-radius:4px;padding:0 4px;background:var(--sf2)}

@@ -1,0 +1,10 @@
+{
+  "name": "atelier-modal-openstand",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Accompaniment engine of OpenStand (AGPL-3.0-or-later), bundled for Atelier modal",
+  "license": "AGPL-3.0-or-later",
+  "scripts": { "build": "node build.mjs" },
+  "dependencies": { "spessasynth_core": "^4.4.9", "spessasynth_lib": "^4.4.7" },
+  "devDependencies": { "esbuild": "^0.25.0" }
+}
