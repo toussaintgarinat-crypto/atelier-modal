@@ -17,7 +17,7 @@ La page [Pourquoi Atelier modal ?](pourquoi.html) résume la proposition de vale
 - Notation au choix : **Do Ré Mi**, **C D E** ou **degrés** (1, ♭3, 5…).
 
 ### Comprendre l'harmonie
-- Onglet **Harmonie** : accords de la tonalité (triades, septièmes), accords par tonalité,
+- Onglet **Harmonie** : accords de la tonalité en **triades ou en accords de septième** (maj7, m7, 7, m7♭5) pour les 12 tonalités, majeures ou mineures, accords par tonalité,
   cycle des quartes, substitutions et explications du « pourquoi » d'un enchaînement.
 - Écoute des accords en **plaqué, arpège** ou accords tenus, avec exploration libre.
 
