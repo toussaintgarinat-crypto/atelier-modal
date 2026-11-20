@@ -102,6 +102,7 @@ l'analyse par photo (OpenRouter) et la sauvegarde Google Drive, toutes deux à t
 | `melody.js` | voix « Thème » : saisie de mélodie, harmonisation, export |
 | `partitions.js` | onglet Partitions (photos / PDF) |
 | `share.js`, `qrcode.js` | partage par lien et QR code |
+| `agencement.js` | navigation en deux groupes, barre du haut et cartes repliables |
 | `sauvegarde.js` | sauvegarde ZIP et Google Drive |
 | `manifest.webmanifest`, `sw.js`, `icons/` | installation et mode hors ligne |
 | `vercel.json` | en-têtes pour l'hébergement Vercel |

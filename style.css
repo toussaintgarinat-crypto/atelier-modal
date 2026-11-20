@@ -163,3 +163,13 @@ body.mel-ed-open{padding-bottom:340px}
 .scbody{flex:1;overflow:auto;touch-action:pan-x pan-y pinch-zoom;-webkit-overflow-scrolling:touch;padding:6px}
 .scbody img{display:block;margin:0 auto;height:auto}
 .plth{height:34px;width:auto;max-width:50px;object-fit:cover;border-radius:4px;vertical-align:middle;margin-right:6px;cursor:pointer}
+
+nav .tabgrp{flex:0 0 auto;align-self:center;font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--mu);opacity:.7;padding:0 6px 0 10px;border-left:1px solid var(--bd);margin-left:4px}
+nav .tabgrp:first-child{border-left:0;margin-left:0;padding-left:0}
+details.fold{padding:0}
+details.fold>summary{padding:12px;font-size:14px;font-weight:650;color:var(--tx);list-style:none}
+details.fold>summary::-webkit-details-marker{display:none}
+details.fold>summary::after{content:"▾";float:right;color:var(--mu)}
+details.fold[open]>summary::after{content:"▴"}
+details.fold>:not(summary){margin-left:12px;margin-right:12px}
+details.fold>:last-child{margin-bottom:12px}
