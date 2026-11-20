@@ -1,7 +1,7 @@
 // Entry point of the OpenStand engine bundle used by Atelier modal.
 // Exposes the accompaniment engine on window.OpenStand; the interface lives in ../bande.js.
 import { Player } from './audio/player'
-import { arrange, BASE_BPM } from './engine/arrange'
+import { arrange, BASE_BPM, CHANNELS } from './engine/arrange'
 import { chorusTranspose, type Timeline } from './engine/timeline'
 import { parseIrealLinks, unknownChords } from './formats/ireal'
 import { irealLink } from './formats/irealWrite'
@@ -44,6 +44,7 @@ const OpenStand = {
   Player,
   arrange,
   BASE_BPM,
+  CHANNELS,
   positionAt,
   chorusTranspose,
   parseIrealLinks,

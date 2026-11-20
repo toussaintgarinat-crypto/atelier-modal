@@ -11,9 +11,10 @@ const K_BAND = "atelier-modal-band";
 const { shiftTon, setTon } = window.__tr;
 
 /* ---------- Réglages ---------- */
-const B = Object.assign({ style: "pop-rock", choruses: 4, keyStep: 0, ramp: 0 }, lsGet(K_BAND) || {});
+const B = Object.assign({ style: "pop-rock", choruses: 4, keyStep: 0, ramp: 0, mute: {}, vol: {} }, lsGet(K_BAND) || {});
+const VOL0 = { bass: 110, comp: 85, drums: 95 };
 const run = { loop: "off", playing: false, loading: false, prog: 0, msg: "", player: null, os: null, tl: null, ref: [], bars: 0, raf: 0, pos: null, lastBar: -2, lastTon: -1, src: null };
-const saveB = () => lsSet(K_BAND, { style: B.style, choruses: B.choruses, keyStep: B.keyStep, ramp: B.ramp });
+const saveB = () => lsSet(K_BAND, { style: B.style, choruses: B.choruses, keyStep: B.keyStep, ramp: B.ramp, mute: B.mute, vol: B.vol });
 
 const SIGS = { "4/4": [4, 4], "3/4": [3, 4], "6/8": [6, 8] };
 const LET = ["C", "D", "E", "F", "G", "A", "B"], PCN = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
@@ -74,6 +75,18 @@ function loopRange(src) {
   return null;
 }
 
+/* ---------- Mélangeur : retirer ou régler un instrument ---------- */
+const PARTS = ["bass", "comp", "drums"];
+const volOf = k => B.mute[k] ? 0 : (B.vol[k] ?? VOL0[k]);
+function applyMix() { if (!run.player || !run.os) return; for (const k of PARTS) run.player.setVolume(run.os.CHANNELS[k], volOf(k)); }
+function compName() { const os = run.os; const pr = os ? os.getStyle(B.style).comp.program : (B.style === "bossa-nova" ? 24 : 0); return pr >= 24 && pr <= 31 ? "Guitare" : "Piano"; }
+function mixHtml() {
+  const rows = [["bass", "🎸", "Basse"], ["comp", compName() === "Guitare" ? "🎸" : "🎹", compName()], ["drums", "🥁", "Batterie"]];
+  return `<div class="muted" style="margin:6px 0 2px">Instruments (touche-en un pour le retirer : tu le joues toi-même)</div>` + rows.map(([k, ic, n]) =>
+    `<div class="row" style="margin-bottom:4px"><button class="chip sm ${B.mute[k] ? "" : "on2"}" data-band-act="mute" data-k="${k}" style="min-width:104px">${ic} ${n}${B.mute[k] ? " · retiré" : ""}</button>
+     <input type="range" min="0" max="127" value="${B.vol[k] ?? VOL0[k]}" data-bandvol="${k}" style="flex:1" ${B.mute[k] ? "disabled" : ""} aria-label="Volume : ${n}"></div>`).join("");
+}
+
 /* ---------- Lecture ---------- */
 async function start(fromSeconds) {
   if (run.busy) return; run.busy = true;
@@ -87,6 +100,7 @@ async function start(fromSeconds) {
     const loop = loopRange(src);
     const { midi, timeline } = os.arrange(chart, os.getStyle(B.style), 0, B.choruses, { loop, keyStep: B.keyStep });
     run.tl = timeline; run.ref = src.ref; run.src = src; run.tab = S.tab; run.lastBar = -2; run.lastTon = -1;
+    applyMix();
     await player.play(midi, fromSeconds || 0);
     player.setRate(liveBpm(0) / os.BASE_BPM);
     run.playing = true;
@@ -170,6 +184,7 @@ function cardHtml() {
    <div class="row"><span class="muted">Tonalité</span><select data-band="keyStep" style="flex:1">${opts(KEY_STEPS, B.keyStep)}</select></div>
    <div class="row"><span class="muted">Tempo</span><select data-band="ramp">${opts([[0, "constant"], [2, "+2 BPM par chorus"], [5, "+5 BPM par chorus"], [10, "+10 BPM par chorus"]], B.ramp)}</select>
     <span class="muted">Boucle</span><select data-band="loop" style="flex:1">${opts(loopOptions(), run.loop)}</select></div>
+   ${mixHtml()}
    <details><summary>Raccourcis clavier</summary><p><kbd>Espace</kbd> lancer / arrêter · <kbd>↑</kbd> <kbd>↓</kbd> tempo ±5 · <kbd>←</kbd> <kbd>→</kbd> tonalité ± demi-ton · <kbd>L</kbd> supprimer la boucle</p></details>`;
 }
 function paint() { const c = $("band"); if (c) c.innerHTML = cardHtml(); }
@@ -194,11 +209,17 @@ document.addEventListener("click", ev => {
   const t = ev.target.closest("[data-band-act],[data-act=tab]"); if (!t) return;
   if (t.dataset.act === "tab") { if (run.playing && t.dataset.v !== run.tab) stop(true); return; }
   if (t.dataset.bandAct === "toggle") { t.blur(); run.playing ? stop() : start(0); }
+  if (t.dataset.bandAct === "mute") { const k = t.dataset.k; B.mute[k] = !B.mute[k]; saveB(); applyMix(); paint(); }
 }, true);
+document.addEventListener("input", ev => {
+  const t = ev.target.closest("[data-bandvol]"); if (!t) return;
+  B.vol[t.dataset.bandvol] = +t.value; saveB(); applyMix();
+});
 document.addEventListener("change", ev => {
   const t = ev.target.closest("[data-band]"); if (!t) return;
   const k = t.dataset.band, v = t.value;
   if (k === "loop") run.loop = v; else { B[k] = k === "style" ? v : +v; saveB(); }
+  if (k === "style") { if (run.playing) restartHere(); else paint(); return; }
   if (run.playing) restartHere(); else paint();
 });
 
