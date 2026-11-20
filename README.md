@@ -27,6 +27,7 @@ La page [Pourquoi Atelier modal ?](pourquoi.html) résume la proposition de vale
   Les sons (banque SoundFont de 4,7 Mo) ne sont téléchargés qu'à la première utilisation, puis gardés hors ligne.
 - **Modes de travail** : boucle sur une mesure, un groupe de mesures ou une section ; **tour des 12 tonalités** (une quarte, un
   demi-ton ou un ton de plus à chaque chorus) ; **tempo qui monte** de quelques BPM à chaque chorus ; nombre de chorus au choix.
+- **Retirer un instrument** : basse, piano (ou guitare selon le style) et batterie se coupent d'un appui, avec un réglage de volume pour chacun — pratique pour jouer soi-même la partie retirée.
 - **Raccourcis clavier** : `Espace` lancer / arrêter, `↑` `↓` tempo ±5, `←` `→` tonalité ± demi-ton, `L` supprimer la boucle.
 - **Import iReal Pro** (onglet Morceaux) : on colle un lien `irealb://` ou une playlist entière ; les morceaux deviennent des
   morceaux Atelier modal (reprises et fins déroulées), jouables avec l'orchestre.

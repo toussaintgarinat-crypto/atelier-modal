@@ -613,4 +613,9 @@ Object.assign(window.__EN, {
 "Atelier modal — solfège & improvisation. Logiciel libre sous licence": "Atelier modal — music theory & improvisation. Free software under the",
 "code source": "source code", ". L'orchestre utilise le moteur d'": ". The band uses the engine of", "et le synthétiseur": "and the synthesizer", ".": "."
 });
+Object.assign(window.__EN, {
+"Instruments (touche-en un pour le retirer : tu le joues toi-même)": "Instruments (tap one to remove it: you play it yourself)",
+"Basse": "Bass", "Batterie": "Drums", "Guitare": "Guitar", "Piano": "Piano"
+});
+window.__EN_RE.unshift([/ · retiré/g, " · removed"], [/Volume : (.+)/g, "Volume: $1"]);
 
