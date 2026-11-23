@@ -1,5 +1,5 @@
 /* Atelier modal — agencement de l'interface (chargé en dernier).
-   1) Navigation en deux groupes : « Apprendre » (Modes, Harmonie, Grilles) et « Ma musique »
+   1) Navigation en deux groupes : « Apprendre » (Modes, Harmonie, Grilles, Exercices) et « Ma musique »
       (Morceaux, Partitions, Analyse, Playlist).
    2) Barre du haut (instrument, notation, tonalités) masquée là où elle ne sert pas.
    3) Écran Morceaux : les cartes secondaires (transposer, partager, Drive…) sont repliées. */
@@ -8,7 +8,7 @@
 const $ = id => document.getElementById(id);
 
 const GROUPS = [
-  ["Apprendre", [["modes", "Modes"], ["harm", "Harmonie"], ["grid", "Grilles"]]],
+  ["Apprendre", [["modes", "Modes"], ["harm", "Harmonie"], ["grid", "Grilles"], ["exo", "Exercices"]]],
   ["Ma musique", [["song", "Morceaux"], ["scores", "Partitions"], ["analyse", "Analyse"], ["playlist", "Playlist"]]]
 ];
 const NO_TOP = ["scores", "analyse", "playlist"];                 // onglets où instrument / tonalité ne servent pas
@@ -78,6 +78,7 @@ render = function () { _render.apply(this, arguments); arrange(); };
 renderSong = function () { _renderSong.apply(this, arguments); arrange(); };
 renderPicker = function () { _renderPicker.apply(this, arguments); arrange(); };
 
+if (window.__lang === "es") FR.D = "Re";      // « Re » (sans accent) en espagnol
 if (window.__lang === "en") S.nota = "en";   // notes C D E par défaut en anglais
 if (typeof renderTop === "function") { try { render(); } catch (e) { /* premier rendu déjà fait par app.js */ } }
 })();
