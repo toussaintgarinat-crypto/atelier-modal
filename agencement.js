@@ -1,5 +1,5 @@
 /* Atelier modal — agencement de l'interface (chargé en dernier).
-   1) Navigation en deux groupes : « Apprendre » (Modes, Harmonie, Grilles) et « Ma musique »
+   1) Navigation en deux groupes : « Apprendre » (Modes, Harmonie, Grilles, Exercices) et « Ma musique »
       (Morceaux, Partitions, Analyse, Playlist).
    2) Barre du haut (instrument, notation, tonalités) masquée là où elle ne sert pas.
    3) Écran Morceaux : les cartes secondaires (transposer, partager, Drive…) sont repliées. */
@@ -8,7 +8,7 @@
 const $ = id => document.getElementById(id);
 
 const GROUPS = [
-  ["Apprendre", [["modes", "Modes"], ["harm", "Harmonie"], ["grid", "Grilles"]]],
+  ["Apprendre", [["modes", "Modes"], ["harm", "Harmonie"], ["grid", "Grilles"], ["exo", "Exercices"]]],
   ["Ma musique", [["song", "Morceaux"], ["scores", "Partitions"], ["analyse", "Analyse"], ["playlist", "Playlist"]]]
 ];
 const NO_TOP = ["scores", "analyse", "playlist"];                 // onglets où instrument / tonalité ne servent pas

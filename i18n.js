@@ -1,12 +1,13 @@
-/* Atelier modal — langue de l'interface (français / anglais). Chargé avant app.js.
-   Le code de l'application écrit ses textes en français ; en mode anglais, ce module les traduit à l'affichage
-   (dictionnaire i18n-en.js) et surveille le DOM pour traduire aussi les rendus suivants. */
+/* Atelier modal — langue de l'interface (français / anglais / espagnol). Chargé avant app.js.
+   Le code de l'application écrit ses textes en français ; en mode anglais ou espagnol, ce module les traduit à l'affichage
+   (dictionnaires i18n-en.js et i18n-es.js ; une chaîne absente du dictionnaire reste en français)
+   et surveille le DOM pour traduire aussi les rendus suivants. */
 (function () {
 "use strict";
 const LS = "atelier-modal-lang";
 let lang = null;
 try { lang = localStorage.getItem(LS); } catch (e) { }
-if (lang !== "fr" && lang !== "en") lang = /^en/i.test(navigator.language || "") ? "en" : "fr";
+if (lang !== "fr" && lang !== "en" && lang !== "es") lang = /^en/i.test(navigator.language || "") ? "en" : /^es/i.test(navigator.language || "") ? "es" : "fr";
 window.__lang = lang;
 document.documentElement.lang = lang;
 
@@ -18,18 +19,19 @@ function addToggle() {
   const h1 = document.querySelector("header h1") || document.body; if (!h1 || document.getElementById("langbtn")) return;
   const b = document.createElement("button");
   b.id = "langbtn"; b.type = "button"; b.setAttribute("data-i18n-skip", "");
-  b.textContent = lang === "en" ? "FR" : "EN";
-  b.title = lang === "en" ? "Passer en français" : "Switch to English";
+  const NEXT = { fr: "EN", en: "ES", es: "FR" };
+  b.textContent = NEXT[lang];
+  b.title = { fr: "Switch to English", en: "Cambiar a español", es: "Passer en français" }[lang];
   b.style.cssText = "margin-left:8px;font:inherit;font-size:11px;font-weight:650;color:var(--ac);background:transparent;border:1px solid var(--bd);border-radius:6px;padding:1px 6px;cursor:pointer";
-  b.addEventListener("click", () => setLang(lang === "en" ? "fr" : "en"));
+  b.addEventListener("click", () => setLang({ fr: "en", en: "es", es: "fr" }[lang]));
   if (h1 === document.body) b.style.cssText += ";position:fixed;top:10px;right:12px;z-index:20;background:var(--bg);padding:4px 9px";
   h1.appendChild(b);
 }
 addToggle();
 
-if (lang !== "en" || !window.__EN) return;
-
-const D = window.__EN;
+const D = lang === "en" ? window.__EN : lang === "es" ? window.__ES : null;
+if (!D) return;
+const RES = (lang === "en" ? window.__EN_RE : window.__ES_RE) || [];
 const keys = Object.keys(D).filter(k => k !== D[k]);
 const exact = new Map(keys.map(k => [k, D[k]]));
 const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -43,7 +45,7 @@ function tr(s) {
   let r = cache.get(s); if (r !== undefined) return r;
   const m = s.match(/^(\s*)([\s\S]*?)(\s*)$/), core = m[2], e = exact.get(core);
   if (e !== undefined) r = m[1] + e + m[3];
-  else { let x = s; for (const [re, rep] of (window.__EN_RE || [])) x = x.replace(re, rep); r = x.replace(RE, y => D[y]); }
+  else { let x = s; for (const [re, rep] of RES) x = x.replace(re, rep); r = x.replace(RE, y => D[y]); }
   if (cache.size > 5000) cache.clear();
   cache.set(s, r); return r;
 }

@@ -189,3 +189,4 @@ header h1>a,header h1>button{flex:none}
 #band a{color:var(--ac)}
 #band .row select{min-width:0}
 kbd{font:inherit;font-size:11px;border:1px solid var(--bd);border-radius:4px;padding:0 4px;background:var(--sf2)}
+.exo ol.exs{margin:6px 0 8px 18px;padding:0}.exo ol.exs li{margin:4px 0;font-size:14px}.exo .scroll{overflow-x:auto}.exo th small{font-weight:400;color:var(--mu)}
