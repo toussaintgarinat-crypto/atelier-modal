@@ -901,3 +901,18 @@ window.__ES_RE = [
  [/Niveau (\d)/g, "Nivel $1"],
  [/Mes? (\d+)/g, "Compás $1"]
 ];
+
+/* ---------- Modos del menor armónico, interruptor Mayor / Menor ---------- */
+Object.assign(window.__ES, {
+"Locrien ♮6": "Locrio ♮6", "Ionien ♯5": "Jónico ♯5", "Dorien ♯4": "Dórico ♯4", "Lydien ♯2": "Lidio ♯2", "Ultralocrien (♭♭7)": "Ultralocrio (♭♭7)",
+"♭5 · 6 nat.": "♭5 · 6.ª nat.",
+"Sur un accord m7♭5 : la 6te naturelle éclaire le locrien ; pose-la sur un temps fort avant de redescendre vers la ♭5.": "Sobre un acorde m7♭5: la 6.ª natural ilumina el locrio; colócala en un tiempo fuerte antes de bajar hacia la ♭5.",
+"Sur un maj7♯5 : le ♯5 donne une couleur suspendue, entre le majeur et l’augmenté.": "Sobre un maj7♯5: la ♯5 da un color suspendido, entre el mayor y el aumentado.",
+"Sur un m7 : le ♯4 apporte la couleur tzigane ; fais-le sonner contre la quinte.": "Sobre un m7: la ♯4 aporta el color gitano; hazla sonar contra la quinta.",
+"Sur un maj7 : le ♯2 et le ♯4 ouvrent le son ; joue le ♯2 en appogiature vers la tierce.": "Sobre un maj7: la ♯2 y la ♯4 abren el sonido; toca la ♯2 como apoyatura hacia la tercera.",
+"Sur un accord diminué (dim7) : la ♭♭7 sonne comme une 6te majeure ; couleur très tendue qui appelle la résolution.": "Sobre un acorde disminuido (dim7): la ♭♭7 suena como una 6.ª mayor; color muy tenso que pide resolución.",
+"Modes majeurs de": "Modos mayores de", "Modes du mineur harmonique de": "Modos del menor armónico de",
+"(même tonique)": "(misma tónica)",
+"Les sept modes du mineur harmonique gardent les mêmes notes (♭3 · ♭6 · 7 majeure) mais changent de tonique : touche-en un pour voir où il se place dans": "Los siete modos del menor armónico conservan las mismas notas (♭3 · ♭6 · 7.ª mayor) pero cambian de tónica: toca uno para ver dónde se sitúa en",
+"Relative majeure :": "Relativo mayor:"
+});
