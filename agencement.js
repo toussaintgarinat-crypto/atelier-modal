@@ -78,6 +78,7 @@ render = function () { _render.apply(this, arguments); arrange(); };
 renderSong = function () { _renderSong.apply(this, arguments); arrange(); };
 renderPicker = function () { _renderPicker.apply(this, arguments); arrange(); };
 
+if (window.__lang === "es") FR.D = "Re";      // « Re » (sans accent) en espagnol
 if (window.__lang === "en") S.nota = "en";   // notes C D E par défaut en anglais
 if (typeof renderTop === "function") { try { render(); } catch (e) { /* premier rendu déjà fait par app.js */ } }
 })();

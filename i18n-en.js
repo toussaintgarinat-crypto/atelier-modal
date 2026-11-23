@@ -530,6 +530,7 @@ Object.assign(window.__EN, window.__EN_EXTRA);
 /* Règles pour les phrases construites par le code (accords de conjugaison, degrés, conseils d'impro…).
    Appliquées avant le dictionnaire. */
 window.__EN_RE = [
+ [/(\d+) façons de le jouer/g, "$1 ways to play it"],
  [/Pose des notes dans la mesure (\d+) \(le curseur doré\) pour voir les accords qui les contiennent\./g, "Place notes in bar $1 (the golden cursor) to see the chords that contain them."],
  [/✓ « (.+?) » est enregistré et ajouté à la playlist « (.+?) »\./g, "✓ “$1” is saved and added to the playlist “$2”."],
  [/(?:Clé de|clé de) (Sol|Fa|Ut 3|Ut 4)(?: \((?:alto|ténor)\))?/g, (m,c)=>({"Sol":"treble clef","Fa":"bass clef","Ut 3":"alto clef","Ut 4":"tenor clef"})[c]],
