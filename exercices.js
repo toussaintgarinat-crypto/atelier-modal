@@ -13,6 +13,9 @@ const LG = window.__lang || "fr";
 const T = (fr, en, es) => LG === "en" ? en : LG === "es" ? es : fr;
 const ord = n => LG === "en" ? n + (n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th") : LG === "es" ? n + ".ª" : (n === 1 ? "1ʳᵉ" : n + "ᵉ");
 const MAJ = [0, 2, 4, 5, 7, 9, 11];
+const NATMIN = [0, 2, 3, 5, 7, 8, 10], HARMIN = [0, 2, 3, 5, 7, 8, 11], MELMIN = [0, 2, 3, 5, 7, 9, 11];
+let SC = MAJ;                                                                  // gamme utilisée par les double-stops (majeure ou mineure naturelle)
+const MINK = () => S.keyMode === "min";
 const EX = { sec: "gam", pair: 4, blues: "tierce" };
 const AMBER = "#f5b13d", INK = "#e8eef4", MUTED = "#93a1b0", BG = "#18202a";
 
@@ -98,7 +101,7 @@ function pitchInfo(tonic, n) {
 /* items : [{ n:[notes], tabs:[[{str,f,fin}]], chord?:"Do7" }]. Une ligne de portée par groupe de `per` éléments. */
 function engrave(items, o) {
   o = o || {};
-  const tonic = o.tonic || S.tonic, per = o.per || 8, dx = o.dx || 40, f = fif(tonic), ka = keyAcc(f), nTab = items[0].tabs.length;
+  const tonic = o.tonic || S.tonic, per = o.per || 8, dx = o.dx || 40, f = fif(MINK() ? spell(tonic, 2, 3) : tonic), ka = keyAcc(f), nTab = items[0].tabs.length;
   let out = "";
   for (let r0 = 0; r0 < items.length; r0 += per) {
     const row = items.slice(r0, r0 + per), infos = row.map(it => it.n.map(n => pitchInfo(tonic, n)));
@@ -168,22 +171,23 @@ const gridHtml = ch => `<div class="bars" style="--cols:4">${ch.map(c => `<div c
    ==================================================================================== */
 function posOf(t) { const r6 = mod(t.pc - 4, 12) || 12, p1 = (r6 - 1) || 12, p2 = ((p1 + 5) % 12) || 12; return { p1, p2 }; }
 /* Gamme majeure dans la fenêtre de 4 cases [p, p+3] ; départ sur la tonique de la corde s0 ; oct = nombre d'octaves. */
-function pattern(t, p, s0, oct) {
+function pattern(t, p, s0, oct, sc) {
+  sc = sc || MAJ;
   let rf = mod(t.pc - OPEN[s0], 12); while (rf < p) rf += 12;
   if (rf > p + 3) return null;
   const base = OPEN[s0] + rf, out = [];
   for (let i = 0; i <= 7 * oct; i++) {
-    const d = i % 7, midi = base + 12 * Math.floor(i / 7) + MAJ[d];
+    const d = i % 7, midi = base + 12 * Math.floor(i / 7) + sc[d];
     let hit = null;
     for (let s = 0; s < 6 && !hit; s++) { const f = midi - OPEN[s]; if (f >= p && f <= p + 3) hit = { str: s, f }; }
     if (!hit) return null;
-    out.push({ midi, d, s: MAJ[d], str: hit.str, f: hit.f, fin: hit.f - p + 1 });
+    out.push({ midi, d, s: sc[d], str: hit.str, f: hit.f, fin: hit.f - p + 1 });
   }
   return out;
 }
 const tabOf = n => ({ str: n.str, f: n.f, fin: n.fin });
 const single = (arr, extra) => arr.map(n => Object.assign({ n: [n], tabs: [[tabOf(n)]] }, extra || {}));
-const keyName = () => nmN(S.tonic) + " " + T("majeur", "major", "mayor");
+const keyName = () => nmN(S.tonic) + " " + (MINK() ? T("mineur", "minor", "menor") : T("majeur", "major", "mayor"));
 const noteNm = d => nmN(spell(S.tonic, d, MAJ[d]));
 
 function exCard(title, sub, steps, body) {
@@ -192,6 +196,69 @@ function exCard(title, sub, steps, body) {
 const gridBtn = () => `<div style="margin-top:8px"><button class="btn sm sec" data-act="tab" data-v="grid">${T("Ouvrir une grille pour s’accompagner", "Open a chord grid to play along", "Abrir una cuadrícula para acompañarse")}</button></div>`;
 const tempo = () => T("Commencez à ♩ = 60 (une note par clic), puis montez à 80 puis 100 sans erreur.", "Start at ♩ = 60 (one note per click), then go up to 80, then 100 without mistakes.", "Empieza a ♩ = 60 (una nota por clic), luego sube a 80 y a 100 sin errores.");
 const written = () => `<div class="muted" style="margin:4px 0 6px">${T("La portée est écrite une octave au-dessus du son réel (convention guitare).", "The staff is written one octave above the real sound (guitar convention).", "El pentagrama se escribe una octava por encima del sonido real (convención de guitarra).")}</div>`;
+
+
+/* ====================================================================================
+   3 bis. GAMMES MINEURES : bonnes positions (index sur la tonique)
+   ==================================================================================== */
+const rootFret = (t, s) => mod(t.pc - OPEN[s], 12) || 12;
+function gammesMinHtml() {
+  const t = S.tonic, root = nmN(t), rel = spell(t, 2, 3), relN = nmN(rel);
+  const p6 = rootFret(t, 0), p5 = rootFret(t, 1), p4 = rootFret(t, 2);
+  const N = pattern(t, p6, 0, 1, NATMIN), N5 = pattern(t, p5, 1, 1, NATMIN), H = pattern(t, p6, 0, 1, HARMIN),
+        M = pattern(t, p4, 2, 1, MELMIN), Md = pattern(t, p4, 2, 1, NATMIN);
+  const posLbl = p => ord(p) + " " + T("position", "position", "posición");
+  const order = [9, 10, 11, 0, 1, 2, 3, 4, 5, 6, 7, 8];
+  const rows = order.map(pc => {
+    const names = TON.filter(x => x.pc === pc).map(x => nmN(x) + "m").join(" / ") || nmN(spell(TON.find(x => x.pc === mod(pc + 3, 12)) || bestTon(mod(pc + 3, 12)), 5, 9)) + "m";
+    return `<tr${pc === t.pc ? ' style="background:var(--sf2);font-weight:700;color:var(--root)"' : ""}><td style="text-align:left">${names}</td><td>${rootFret({ pc }, 0)}</td><td>${rootFret({ pc }, 1)}</td><td>${rootFret({ pc }, 2)}</td></tr>`;
+  }).join("");
+  const unavailable = `<div class="card muted">${T("Exercice indisponible pour cette tonalité.", "Exercise not available for this key.", "Ejercicio no disponible para esta tonalidad.")}</div>`;
+  let h = exCard(T("Les bonnes positions du mineur", "The good positions in minor", "Las buenas posiciones del menor"), keyName(), [
+    T(`Le mineur naturel a les <b>mêmes notes que sa relative majeure</b> : ${root} mineur = ${relN} majeur, seule la tonique change (armure de ${relN} majeur).`, `Natural minor has the <b>same notes as its relative major</b>: ${root} minor = ${relN} major, only the tonic changes (key signature of ${relN} major).`, `El menor natural tiene las <b>mismas notas que su relativa mayor</b>: ${root} menor = ${relN} mayor, solo cambia la tónica (armadura de ${relN} mayor).`),
+    T("Ici l’<b>index se pose sur la tonique</b> : la main reste immobile et couvre 4 cases, de la case <i>p</i> à la case <i>p</i>+3 (index = <i>p</i>, majeur = <i>p</i>+1, annulaire = <i>p</i>+2, auriculaire = <i>p</i>+3).", "Here the <b>index finger sits on the tonic</b>: the hand stays still and covers 4 frets, from fret <i>p</i> to fret <i>p</i>+3 (index = <i>p</i>, middle = <i>p</i>+1, ring = <i>p</i>+2, pinky = <i>p</i>+3).", "Aquí el <b>índice se coloca sobre la tónica</b>: la mano se queda quieta y cubre 4 trastes, del traste <i>p</i> al <i>p</i>+3 (índice = <i>p</i>, medio = <i>p</i>+1, anular = <i>p</i>+2, meñique = <i>p</i>+3)."),
+    T("<b>1ʳᵉ position</b> : tonique sur la 6ᵉ corde. <b>2ᵉ position</b> : tonique sur la 5ᵉ corde. <b>3ᵉ position</b> : tonique sur la 4ᵉ corde (utile pour le mineur mélodique).", "<b>1st position</b>: tonic on the 6th string. <b>2nd position</b>: tonic on the 5th string. <b>3rd position</b>: tonic on the 4th string (useful for melodic minor).", "<b>1.ª posición</b>: tónica en la 6.ª cuerda. <b>2.ª posición</b>: tónica en la 5.ª cuerda. <b>3.ª posición</b>: tónica en la 4.ª cuerda (útil para el menor melódico).")
+  ], `<table style="width:100%;margin-top:6px"><tr><th style="text-align:left">${T("Tonalité", "Key", "Tonalidad")}</th><th>${T("1ʳᵉ position<br><small>(6ᵉ corde)</small>", "1st position<br><small>(6th string)</small>", "1.ª posición<br><small>(6.ª cuerda)</small>")}</th><th>${T("2ᵉ position<br><small>(5ᵉ corde)</small>", "2nd position<br><small>(5th string)</small>", "2.ª posición<br><small>(5.ª cuerda)</small>")}</th><th>${T("3ᵉ position<br><small>(4ᵉ corde)</small>", "3rd position<br><small>(4th string)</small>", "3.ª posición<br><small>(4.ª cuerda)</small>")}</th></tr>${rows}</table>
+    <div class="muted" style="margin-top:6px">${T("Les cases indiquées sont celles de la tonique (donc de l’index). Choisissez la tonalité mineure dans la barre du haut : les exercices ci-dessous s’adaptent.", "The frets shown are those of the tonic (so of the index finger). Pick the minor key in the top bar: the exercises below adapt to it.", "Los trastes indicados son los de la tónica (es decir, del índice). Elige la tonalidad menor en la barra superior: los ejercicios de abajo se adaptan.")}</div>`);
+  // 1. mineur naturel, 1re position
+  if (!N) h += unavailable; else h += exCard("1 · " + T("Gamme de " + keyName() + " naturel sur 1 octave", keyName() + " natural scale over 1 octave", "Escala de " + keyName() + " natural en 1 octava"), posLbl(p6), [
+    T(`Index sur la case <b>${p6}</b> (cases ${p6} à ${p6 + 3}). Départ sur ${root} à la 6ᵉ corde (doigt ${N[0].fin}) ; montez jusqu’à ${root} à la 4ᵉ corde (case ${N[7].f}, doigt ${N[7].fin}).`, `Index on fret <b>${p6}</b> (frets ${p6} to ${p6 + 3}). Start on ${root} on the 6th string (finger ${N[0].fin}); climb to ${root} on the 4th string (fret ${N[7].f}, finger ${N[7].fin}).`, `Índice en el traste <b>${p6}</b> (trastes ${p6} a ${p6 + 3}). Sal de ${root} en la 6.ª cuerda (dedo ${N[0].fin}); sube hasta ${root} en la 4.ª cuerda (traste ${N[7].f}, dedo ${N[7].fin}).`),
+    T("Redescendez par le même chemin, sans bouger la main. Les ♭3 · ♭6 · ♭7 sont les notes qui font la couleur mineure : chantez-les en jouant.", "Come back down the same way, without moving the hand. The ♭3 · ♭6 · ♭7 are the notes that make the minor colour: sing them as you play.", "Baja por el mismo camino sin mover la mano. Las ♭3 · ♭6 · ♭7 son las notas que dan el color menor: cántalas mientras tocas."), tempo()
+  ], written() + engrave(single(N.concat(N.slice(0, 7).reverse())), { per: 8 }) + neck(N, p6) + gridBtn());
+  // 2. mineur naturel, 2e position
+  if (N5) h += exCard("2 · " + T("Gamme de " + keyName() + " naturel, tonique à la 5ᵉ corde", keyName() + " natural scale, tonic on the 5th string", "Escala de " + keyName() + " natural, tónica en la 5.ª cuerda"), posLbl(p5), [
+    T(`Index sur la case <b>${p5}</b> (cases ${p5} à ${p5 + 3}). Départ sur ${root} à la 5ᵉ corde, case ${N5[0].f} (doigt ${N5[0].fin}).`, `Index on fret <b>${p5}</b> (frets ${p5} to ${p5 + 3}). Start on ${root} on the 5th string, fret ${N5[0].f} (finger ${N5[0].fin}).`, `Índice en el traste <b>${p5}</b> (trastes ${p5} a ${p5 + 3}). Sal de ${root} en la 5.ª cuerda, traste ${N5[0].f} (dedo ${N5[0].fin}).`),
+    T("Même gamme, une corde plus haut : montez d’une octave puis redescendez, en comparant avec la 1ʳᵉ position.", "Same scale, one string higher: go up an octave and back down, comparing with the 1st position.", "La misma escala, una cuerda más arriba: sube una octava y baja, comparando con la 1.ª posición."), tempo()
+  ], written() + engrave(single(N5.concat(N5.slice(0, 7).reverse())), { per: 8 }) + neck(N5, p5));
+  // 3. mineur harmonique
+  if (H) h += exCard("3 · " + T("Gamme de " + root + " mineur harmonique", root + " harmonic minor scale", "Escala de " + root + " menor armónica"), posLbl(p6), [
+    T(`Même position que le 1 (index sur la case <b>${p6}</b>) : une seule note change, la ♭7 devient une <b>7ᵉ majeure</b> (${nmN(spell(t, 6, 11))}).`, `Same position as exercise 1 (index on fret <b>${p6}</b>): only one note changes, the ♭7 becomes a <b>major 7th</b> (${nmN(spell(t, 6, 11))}).`, `La misma posición que el 1 (índice en el traste <b>${p6}</b>): solo cambia una nota, la ♭7 pasa a ser una <b>7.ª mayor</b> (${nmN(spell(t, 6, 11))}).`),
+    T("Écoutez l’intervalle d’une tierce mineure entre la ♭6 et la 7 : c’est la couleur « orientale » du mineur harmonique. La sensible tire vers la tonique.", "Listen to the minor-third interval between the ♭6 and the 7: it is the “oriental” colour of the harmonic minor. The leading note pulls towards the tonic.", "Escucha el intervalo de tercera menor entre la ♭6 y la 7: es el color «oriental» del menor armónico. La sensible tira hacia la tónica."), tempo()
+  ], written() + engrave(single(H.concat(H.slice(0, 7).reverse())), { per: 8 }) + neck(H, p6) + gridBtn());
+  // 4. mineur mélodique
+  if (M && Md) h += exCard("4 · " + T("Gamme de " + root + " mineur mélodique", root + " melodic minor scale", "Escala de " + root + " menor melódica"), posLbl(p4), [
+    T(`Index sur la case <b>${p4}</b>, tonique à la 4ᵉ corde. <b>En montant</b> : ♭3 seulement (6ᵉ et 7ᵉ degrés majeurs : ${nmN(spell(t, 5, 9))} · ${nmN(spell(t, 6, 11))}).`, `Index on fret <b>${p4}</b>, tonic on the 4th string. <b>Going up</b>: only the ♭3 (6th and 7th degrees are major: ${nmN(spell(t, 5, 9))} · ${nmN(spell(t, 6, 11))}).`, `Índice en el traste <b>${p4}</b>, tónica en la 4.ª cuerda. <b>Al subir</b>: solo la ♭3 (los grados 6.º y 7.º son mayores: ${nmN(spell(t, 5, 9))} · ${nmN(spell(t, 6, 11))}).`),
+    T("<b>En descendant</b> : on revient au mineur naturel (♭7 puis ♭6), comme dans la tradition classique. La portée écrit les altérations à chaque changement.", "<b>Going down</b>: back to natural minor (♭7 then ♭6), as in the classical tradition. The staff writes the accidentals at each change.", "<b>Al bajar</b>: se vuelve al menor natural (♭7 y luego ♭6), como en la tradición clásica. El pentagrama escribe las alteraciones en cada cambio."), tempo()
+  ], written() + engrave(single(M.concat(Md.slice(0, 7).reverse())), { per: 8 }) + neck(M, p4));
+  // 5. arpèges
+  if (N) {
+    const a3 = [0, 2, 4, 7], a7 = [0, 2, 4, 6, 7];
+    const arp = a3.concat(a3.slice(0, -1).reverse()), arp7 = a7.concat(a7.slice(0, -1).reverse());
+    h += exCard("5 · " + T("Arpèges de " + root + " mineur", root + " minor arpeggios", "Arpegios de " + root + " menor"), posLbl(p6), [
+      T(`Sur la gamme du 1 : <b>1 · ♭3 · 5 · 8</b> (${noteMin(0)} · ${noteMin(2)} · ${noteMin(4)} · ${noteMin(0)}), puis redescendez : c’est l’accord de ${root}m.`, `On the scale of exercise 1: <b>1 · ♭3 · 5 · 8</b> (${noteMin(0)} · ${noteMin(2)} · ${noteMin(4)} · ${noteMin(0)}), then come back down: it is the ${root}m chord.`, `Sobre la escala del 1: <b>1 · ♭3 · 5 · 8</b> (${noteMin(0)} · ${noteMin(2)} · ${noteMin(4)} · ${noteMin(0)}), y vuelve a bajar: es el acorde de ${root}m.`),
+      T(`Ajoutez la ♭7 (<b>1 · ♭3 · 5 · ♭7 · 8</b>, ${noteMin(6)}) : c’est l’arpège de ${root}m7, celui des grilles de blues mineur et de jazz.`, `Add the ♭7 (<b>1 · ♭3 · 5 · ♭7 · 8</b>, ${noteMin(6)}): it is the ${root}m7 arpeggio, the one for minor blues and jazz grids.`, `Añade la ♭7 (<b>1 · ♭3 · 5 · ♭7 · 8</b>, ${noteMin(6)}): es el arpegio de ${root}m7, el de las cuadrículas de blues menor y de jazz.`),
+      T("Jouez-les ensuite sur une grille mineure : visez ces notes sur les temps forts de l’accord.", "Then play them over a minor grid: aim for these notes on the strong beats of the chord.", "Después tócalos sobre una cuadrícula menor: apunta a estas notas en los tiempos fuertes del acorde.")
+    ], written() + engrave(single(arp.map(i => N[i])), { per: 7, dx: 44 }) + engrave(single(arp7.map(i => N[i])), { per: 9, dx: 40 }) + gridBtn());
+    // 6. séquence par trois
+    const seq = []; for (let i = 0; i < 6; i++) seq.push(N[i], N[i + 1], N[i + 2]);
+    h += exCard("6 · " + T("Séquence en groupes de trois notes", "Sequence in groups of three notes", "Secuencia en grupos de tres notas"), posLbl(p6), [
+      T("Jouez 1-2-3, 2-3-4, 3-4-5… jusqu’à 6-7-8 (numéros = degrés de la gamme mineure).", "Play 1-2-3, 2-3-4, 3-4-5… up to 6-7-8 (numbers = degrees of the minor scale).", "Toca 1-2-3, 2-3-4, 3-4-5… hasta 6-7-8 (números = grados de la escala menor)."),
+      T("Gardez les doigts proches des cordes : chaque doigt garde « sa » case.", "Keep your fingers close to the strings: each finger keeps “its” fret.", "Mantén los dedos cerca de las cuerdas: cada dedo conserva « su » traste."), tempo()
+    ], written() + engrave(single(seq), { per: 9, dx: 36 }));
+  }
+  return h;
+}
+const noteMin = d => nmN(spell(S.tonic, d, NATMIN[d]));
 
 function gammesHtml() {
   const t = S.tonic, { p1, p2 } = posOf(t), A = pattern(t, p1, 0, 2), B = pattern(t, p2, 1, 1), up = A && A.slice(0, 8);
@@ -248,7 +315,7 @@ function gammesHtml() {
 /* ====================================================================================
    4. DOUBLE-STOPS
    ==================================================================================== */
-const stepOf = i => 12 * Math.floor(i / 7) + MAJ[i % 7];
+const stepOf = i => 12 * Math.floor(i / 7) + SC[i % 7];
 const dyadFin = (fl, fh) => {
   const fr = [fl, fh].filter(f => f > 0); if (!fr.length) return [0, 0];
   const m = Math.min(...fr), g = f => f === 0 ? 0 : fr.length === 1 ? (f <= 4 ? f : 1) : f === m ? 1 : Math.min(4, f - m + 1);
@@ -267,7 +334,7 @@ function thirdsAlong(t, s) {
       const pl = OPEN[s] + f0 + stepOf(k), ph = pl + stepOf(k + 2) - stepOf(k), fl = pl - OPEN[s], fh = ph - OPEN[s + 1];
       if (fh < 0) { res = null; break; }
       if (Math.max(fl, fh) > 19) break;
-      res.push(dyadItem(t, { midi: pl, d: k % 7, s: MAJ[k % 7] }, { midi: ph, d: (k + 2) % 7, s: MAJ[(k + 2) % 7] }, s, fl, fh));
+      res.push(dyadItem(t, { midi: pl, d: k % 7, s: SC[k % 7] }, { midi: ph, d: (k + 2) % 7, s: SC[(k + 2) % 7] }, s, fl, fh));
     }
     if (res) return res;
   }
@@ -303,7 +370,7 @@ function thirdsAcross(t) {
       const end = prev.reduce((x, y) => y.cost < x.cost ? y : x);
       if (!best || end.cost < best.cost) { const path = []; for (let n = end; n; n = n.from) path.unshift(n.c); best = { cost: end.cost, path }; }
     }
-    if (best) return best.path.map((c, k) => dyadItem(t, { midi: c.pl, d: k % 7, s: MAJ[k % 7] }, { midi: c.pl + stepOf(k + 2) - stepOf(k), d: (k + 2) % 7, s: MAJ[(k + 2) % 7] }, c.s, c.fl, c.fh));
+    if (best) return best.path.map((c, k) => dyadItem(t, { midi: c.pl, d: k % 7, s: SC[k % 7] }, { midi: c.pl + stepOf(k + 2) - stepOf(k), d: (k + 2) % 7, s: SC[(k + 2) % 7] }, c.s, c.fl, c.fh));
   }
   return [];
 }
@@ -342,6 +409,7 @@ function doublesHtml() {
     T("Repérez le changement de paire de cordes : c’est là qu’on regarde la main. ○ = corde à vide.", "Spot where the string pair changes: that is where to watch your hand. ○ = open string.", "Fíjate en el cambio de par de cuerdas: ahí hay que mirar la mano. ○ = cuerda al aire."),
     T("Jouez-le lentement (♩ = 60) en laissant sonner les deux notes ensemble.", "Play it slowly (♩ = 60), letting both notes ring together.", "Tócalo despacio (♩ = 60) dejando sonar las dos notas juntas.")
   ], engrave(across, { per: 8, dx: 44 }) + gridBtn());
+  if (MINK()) return h + `<div class="card muted">${T("Le blues en double-stops barrés (cordes 3–2 ou 4–3) donne des tierces et des quartes <b>majeures / justes</b> sur une même case : il se joue sur les accords dominants (I7 · IV7 · V7). Repassez en « Majeur » pour l’étudier.", "The barred double-stop blues (strings 3–2 or 4–3) gives <b>major</b> thirds and perfect fourths on the same fret: it is played over dominant chords (I7 · IV7 · V7). Switch back to “Major” to study it.", "El blues con double-stops en cejilla (cuerdas 3–2 o 4–3) da terceras <b>mayores</b> y cuartas justas en un mismo traste: se toca sobre acordes dominantes (I7 · IV7 · V7). Vuelve a « Mayor » para estudiarlo.")}</div>`;
   // 3. barré sur deux cordes : blues
   const kind = EX.blues, bl = bluesItems(t, kind);
   const chips2 = [["tierce", T("tierces (cordes 3–2)", "thirds (strings 3–2)", "terceras (cuerdas 3–2)")], ["quarte", T("quartes (cordes 4–3)", "fourths (strings 4–3)", "cuartas (cuerdas 4–3)")]]
@@ -362,7 +430,7 @@ function renderExo() {
   const seg = `<div class="seg" style="margin-bottom:10px">${[["gam", T("Gammes en position", "Scales in position", "Escalas en posición")], ["dbl", "Double-stops"]]
     .map(([k, l]) => `<button class="${EX.sec === k ? "on" : ""}" data-act="exo-sec" data-v="${k}">${l}</button>`).join("")}</div>`;
   let body = "";
-  try { body = EX.sec === "dbl" ? doublesHtml() : gammesHtml(); } catch (e) { body = `<div class="card muted">${T("Exercice indisponible.", "Exercise not available.", "Ejercicio no disponible.")} ${e && e.message || ""}</div>`; }
+  try { SC = MINK() ? NATMIN : MAJ; body = EX.sec === "dbl" ? doublesHtml() : MINK() ? gammesMinHtml() : gammesHtml(); } catch (e) { body = `<div class="card muted">${T("Exercice indisponible.", "Exercise not available.", "Ejercicio no disponible.")} ${e && e.message || ""}</div>`; }
   p.innerHTML = `<div data-i18n-skip>${seg}${body}</div>`;
 }
 

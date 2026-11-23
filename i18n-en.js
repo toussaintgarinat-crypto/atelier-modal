@@ -635,3 +635,18 @@ window.__EN_RE.unshift(
  [/Modèle de vision, ex\. (.+)/g, "Vision model, e.g. $1"]
 );
 
+
+/* ---------- Modes du mineur harmonique, bascule Majeur / Mineur ---------- */
+Object.assign(window.__EN, {
+"Locrien ♮6": "Locrian ♮6", "Ionien ♯5": "Ionian ♯5", "Dorien ♯4": "Dorian ♯4", "Lydien ♯2": "Lydian ♯2", "Ultralocrien (♭♭7)": "Ultralocrian (♭♭7)",
+"♭5 · 6 nat.": "♭5 · nat. 6",
+"Sur un accord m7♭5 : la 6te naturelle éclaire le locrien ; pose-la sur un temps fort avant de redescendre vers la ♭5.": "Over an m7♭5 chord: the natural 6th brightens the Locrian; land on it on a strong beat before coming back down to the ♭5.",
+"Sur un maj7♯5 : le ♯5 donne une couleur suspendue, entre le majeur et l’augmenté.": "Over a maj7♯5: the ♯5 gives a suspended colour, between major and augmented.",
+"Sur un m7 : le ♯4 apporte la couleur tzigane ; fais-le sonner contre la quinte.": "Over an m7: the ♯4 brings the gypsy colour; let it ring against the fifth.",
+"Sur un maj7 : le ♯2 et le ♯4 ouvrent le son ; joue le ♯2 en appogiature vers la tierce.": "Over a maj7: the ♯2 and ♯4 open up the sound; play the ♯2 as an appoggiatura towards the third.",
+"Sur un accord diminué (dim7) : la ♭♭7 sonne comme une 6te majeure ; couleur très tendue qui appelle la résolution.": "Over a diminished chord (dim7): the ♭♭7 sounds like a major 6th; a very tense colour that calls for resolution.",
+"Modes majeurs de": "Major modes of", "Modes du mineur harmonique de": "Harmonic minor modes of",
+"(même tonique)": "(same tonic)",
+"Les sept modes du mineur harmonique gardent les mêmes notes (♭3 · ♭6 · 7 majeure) mais changent de tonique : touche-en un pour voir où il se place dans": "The seven harmonic minor modes keep the same notes (♭3 · ♭6 · major 7) but change tonic: tap one to see where it sits in",
+"Relative majeure :": "Relative major:"
+});

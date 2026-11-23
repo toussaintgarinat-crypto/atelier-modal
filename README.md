@@ -14,6 +14,12 @@ La page [Pourquoi Atelier modal ?](pourquoi.html) résume la proposition de vale
 - Onglet **Modes** : lydien, ionien, mixolydien, dorien, éolien, etc., ainsi que les gammes mineure
   mélodique, mineure harmonique et blues. Chaque mode indique sa **note caractéristique** et un
   conseil d'improvisation pour le faire sonner.
+- Bascule **Majeur / Mineur** dans l'en-tête : en mineur, la rangée de tonalités part de la relative de Do (**La mineur**, puis
+  Si♭m, Si m, Do m…) ; passer de l'un à l'autre déplace la tonique sur la relative (Do ↔ La).
+- Bandeau **Modes du mineur harmonique** (même tonique) : les sept modes — mineur harmonique, locrien ♮6, ionien ♯5, dorien ♯4,
+  phrygien dominant, lydien ♯2, ultralocrien (♭♭7) — avec leur gamme parente.
+- Onglet **Exercices** : en mode mineur, gammes en position (naturelle, harmonique, mélodique), arpèges m et m7, séquences,
+  et double-stops en tierces (le long et en travers du manche).
 - Notation au choix : **Do Ré Mi**, **C D E** ou **degrés** (1, ♭3, 5…).
 
 ### Comprendre l'harmonie
