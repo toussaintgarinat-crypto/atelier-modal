@@ -213,8 +213,8 @@ function gammesHtml() {
   h += exCard("1 · " + T("Gamme de " + keyName() + " sur 2 octaves", keyName() + " scale over 2 octaves", "Escala de " + keyName() + " en 2 octavas"), ord(p1) + " " + T("position", "position", "posición"), [
     T(`Placez l’index sur la case <b>${p1}</b> : la main reste entre les cases ${p1} et ${p1 + 3}.`, `Put the index on fret <b>${p1}</b>: the hand stays between frets ${p1} and ${p1 + 3}.`, `Pon el índice en el traste <b>${p1}</b>: la mano se queda entre los trastes ${p1} y ${p1 + 3}.`),
     T(`Départ sur ${root} (6ᵉ corde, case ${A[0].f}, doigt ${A[0].fin}) ; montez jusqu’à ${root} (1ʳᵉ corde, case ${A[14].f}, doigt ${A[14].fin}).`, `Start on ${root} (6th string, fret ${A[0].f}, finger ${A[0].fin}); climb to ${root} (1st string, fret ${A[14].f}, finger ${A[14].fin}).`, `Sal de ${root} (6.ª cuerda, traste ${A[0].f}, dedo ${A[0].fin}); sube hasta ${root} (1.ª cuerda, traste ${A[14].f}, dedo ${A[14].fin}).`),
-    T("Redescendez par le même chemin, sans changer la position de la main. Alternez médiator bas / haut.", "Come back down the same way without moving the hand. Alternate down / up picking.", "Baja por el mismo camino sin mover la mano. Alterna púa abajo / arriba."), tempo()
-  ], written() + engrave(single(A), { per: 8 }) + neck(A, p1) + gridBtn());
+    T("Redescendez par le même chemin (la descente est écrite à la suite), sans changer la position de la main. Alternez médiator bas / haut.", "Come back down the same way (the descent is written right after), without moving the hand. Alternate down / up picking.", "Baja por el mismo camino (el descenso está escrito a continuación), sin mover la mano. Alterna púa abajo / arriba."), tempo()
+  ], written() + engrave(single(A.concat(A.slice(0, 14).reverse())), { per: 8 }) + neck(A, p1) + gridBtn());
   // 2. gamme 1 octave
   const upDown = B.concat(B.slice(0, 7).reverse());
   h += exCard("2 · " + T("Gamme de " + keyName() + " sur 1 octave", keyName() + " scale over 1 octave", "Escala de " + keyName() + " en 1 octava"), ord(p2) + " " + T("position", "position", "posición"), [
